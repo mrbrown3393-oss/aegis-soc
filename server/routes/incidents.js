@@ -1,0 +1,47 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import { store, addAudit } from '../data/store.js';
+import { authenticate, requireRole } from '../middleware/auth.js';
+import { validate } from '../middleware/validate.js';
+
+const router = Router();
+router.use(authenticate);
+
+router.get('/', (req, res) => {
+  const list = [...store.incidents].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  res.json({ data: list, total: list.length, simulation: true });
+});
+
+router.get('/:id', (req, res) => {
+  const inc = store.incidents.find(i => i.id === req.params.id);
+  if (!inc) return res.status(404).json({ error: 'Incident not found' });
+  res.json(inc);
+});
+
+const updateSchema = z.object({
+  params: z.object({ id: z.string() }),
+  body: z.object({
+    status: z.enum(['open', 'investigating', 'contained', 'resolved', 'closed']).optional(),
+    owner: z.string().nullable().optional(),
+    note: z.string().max(2000).optional()
+  })
+});
+
+router.patch('/:id', requireRole('admin', 'analyst'), validate(updateSchema), (req, res) => {
+  const inc = store.incidents.find(i => i.id === req.params.id);
+  if (!inc) return res.status(404).json({ error: 'Incident not found' });
+  if (req.body.status) inc.status = req.body.status;
+  if (req.body.owner !== undefined) inc.owner = req.body.owner;
+  if (req.body.note) {
+    inc.timeline.push({
+      ts: new Date().toISOString(),
+      actor: req.user.name,
+      action: req.body.note
+    });
+  }
+  inc.updatedAt = new Date().toISOString();
+  addAudit(req.user.name, 'incident.update', inc.id, 'success');
+  res.json(inc);
+});
+
+export default router;
