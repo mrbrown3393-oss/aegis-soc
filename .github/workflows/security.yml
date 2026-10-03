@@ -22,8 +22,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - run: npm ci
-      - run: cd client && npm ci
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: cd client && npm install --ignore-scripts --no-audit --no-fund
       - run: npx @cyclonedx/cyclonedx-npm --output-file sbom-node.json --output-format JSON
       - if: github.event_name == 'pull_request'
         uses: actions/dependency-review-action@v4
