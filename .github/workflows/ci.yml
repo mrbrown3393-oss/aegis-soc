@@ -6,13 +6,26 @@ on:
   pull_request:
 
 jobs:
-  build:
+  backend:
     runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:6
+        ports: ["27017:27017"]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-python@v5
         with:
-          node-version: '20'
-      - run: npm install
-      - run: npm install --prefix client
-      - run: npx --prefix client vite build
+          python-version: '3.11'
+      - run: pip install -r backend/requirements.txt
+      - name: Start API
+        run: |
+          cd backend
+          export MONGO_URL=mongodb://localhost:27017 DB_NAME=aegis_test JWT_SECRET=test-secret-not-for-production ADMIN_EMAIL=admin@test.io ADMIN_PASSWORD=TestPass123! ANALYST_EMAIL=analyst@test.io ANALYST_PASSWORD=TestPass123! FRONTEND_URL=http://localhost:3000 CORS_ORIGINS=http://localhost:3000
+          uvicorn server:app --host 127.0.0.1 --port 8001 &
+          sleep 5
+      - name: Smoke test
+        run: |
+          curl -sf http://127.0.0.1:8001/api/ | grep -q ok
+          curl -sf -c /tmp/c.txt -X POST http://127.0.0.1:8001/api/auth/login -H 'Content-Type: application/json' -d '{"email":"admin@test.io","password":"TestPass123!"}' | grep -q Logged
+          curl -sf -b /tmp/c.txt 'http://127.0.0.1:8001/api/metrics/overview?tenant=all' | grep -q total_threats
