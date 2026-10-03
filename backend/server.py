@@ -113,8 +113,6 @@ client = AsyncIOMotorClient(settings.MONGO_URL, **mongo_kwargs)
 db = client[settings.DB_NAME]
 
 api_router = APIRouter(prefix="/api")
-from sso import sso_router
-from anomaly import anomaly_router
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -216,7 +214,7 @@ async def write_audit(actor: str, action: str, resource: str, request: Request, 
         "actor": actor,
         "action": action,
         "resource": resource,
-        "ip": request.client.host if request.client else "unknown",
+        "ip": forwarded_client_ip(request, settings.TRUSTED_PROXY_IPS),
         "tenant": tenant,
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
@@ -717,6 +715,10 @@ async def delete_user(user_id: str, request: Request, user: dict = Depends(requi
     await write_audit(user["email"], "user_delete", target["email"], request, target["tenant"])
     return {"message": "User removed"}
 
+
+# Import security routers after shared server dependencies are defined to avoid circular imports.
+from sso import sso_router
+from anomaly import anomaly_router
 
 app.include_router(api_router)
 app.include_router(sso_router)
