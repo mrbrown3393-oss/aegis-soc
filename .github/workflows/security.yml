@@ -1,0 +1,46 @@
+name: Security
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 3 * * 1"
+permissions:
+  contents: read
+  security-events: write
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip cyclonedx-bom pip-audit
+      - run: pip install -r backend/requirements.txt
+      - run: cyclonedx-py requirements backend/requirements.txt --output-format json --output-file sbom-python.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+      - run: cd client && npm ci
+      - run: npx @cyclonedx/cyclonedx-npm --output-file sbom-node.json --output-format JSON
+      - if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: pip-audit -r backend/requirements.txt
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aegis-soc-sbom
+          path: |
+            sbom-python.json
+            sbom-node.json
