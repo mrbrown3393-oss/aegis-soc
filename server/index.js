@@ -4,12 +4,12 @@
  */
 import express from 'express';
 import cors from 'cors';
-import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { config } from './config.js';
 import { store, generateEvent } from './data/store.js';
+import { securityHeaders, extraSecurityHeaders } from './middleware/securityHeaders.js';
 
 import authRoutes from './routes/auth.js';
 import dashboardRoutes from './routes/dashboard.js';
@@ -22,7 +22,9 @@ import aiRoutes from './routes/ai.js';
 const app = express();
 const server = createServer(app);
 
-app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+// Strict security headers (hardened Helmet profile + Permissions-Policy, no-store)
+app.use(securityHeaders());
+app.use(extraSecurityHeaders);
 app.use(cors({ origin: config.CORS_ORIGIN, credentials: true }));
 app.use(express.json({ limit: '100kb' }));
 app.use(rateLimit({
