@@ -25,6 +25,7 @@ from __future__ import annotations
 import os
 import secrets
 import hashlib
+from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Literal, Optional
 
@@ -36,6 +37,10 @@ from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
 from pydantic_settings import BaseSettings
+
+from security_hardening import SecurityHeadersMiddleware, forwarded_client_ip
+from sso import sso_router
+from anomaly import anomaly_router
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -52,6 +57,22 @@ class Settings(BaseSettings):
     ANALYST_PASSWORD: str = "change-me"
     FRONTEND_URL: str = "http://localhost:3000"
     CORS_ORIGINS: str = "http://localhost:3000"
+    MONGO_TLS: bool = True
+    MONGO_TLS_CA_FILE: str = ""
+    MONGO_TLS_CERT_KEY_FILE: str = ""
+    MONGO_TLS_ALLOW_INVALID_CERTS: bool = False
+    TRUSTED_PROXY_IPS: str = ""
+    SSO_BASE_URL: str = "http://localhost:8001"
+    SAML_ENABLED: bool = False
+    OIDC_ENABLED: bool = False
+    SAML_IDP_METADATA_URL: str = ""
+    SAML_IDP_ENTITY_ID: str = ""
+    SAML_IDP_SSO_URL: str = ""
+    SAML_IDP_X509_CERT: str = ""
+    OIDC_ISSUER_URL: str = ""
+    OIDC_CLIENT_ID: str = ""
+    OIDC_CLIENT_SECRET: str = ""
+    OIDC_SCOPES: str = "openid profile email"
 
     class Config:
         env_file = ".env"
@@ -72,6 +93,8 @@ LOCKOUT_MINUTES = 15
 
 app = FastAPI(title="Aegis SOC API", version="2.1.0", docs_url="/docs", redoc_url="/redoc")
 
+app.add_middleware(SecurityHeadersMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()] + [settings.FRONTEND_URL],
@@ -80,7 +103,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-client = AsyncIOMotorClient(settings.MONGO_URL)
+mongo_kwargs = {
+    "tls": settings.MONGO_TLS,
+    "tlsAllowInvalidCertificates": settings.MONGO_TLS_ALLOW_INVALID_CERTS,
+}
+if settings.MONGO_TLS_CA_FILE:
+    mongo_kwargs["tlsCAFile"] = settings.MONGO_TLS_CA_FILE
+if settings.MONGO_TLS_CERT_KEY_FILE:
+    mongo_kwargs["tlsCertificateKeyFile"] = settings.MONGO_TLS_CERT_KEY_FILE
+client = AsyncIOMotorClient(settings.MONGO_URL, **mongo_kwargs)
 db = client[settings.DB_NAME]
 
 api_router = APIRouter(prefix="/api")
@@ -435,7 +466,7 @@ async def register(body: RegisterRequest, request: Request, response: Response):
 
 @api_router.post("/auth/login")
 async def login(body: LoginRequest, request: Request, response: Response):
-    ip = request.client.host if request.client else "unknown"
+    ip = forwarded_client_ip(request, settings.TRUSTED_PROXY_IPS)
     await check_lockout(ip, body.email)
     user = await db.users.find_one({"email": body.email})
     if not user or not verify_password(body.password, user["password_hash"]):
@@ -688,3 +719,5 @@ async def delete_user(user_id: str, request: Request, user: dict = Depends(requi
 
 
 app.include_router(api_router)
+app.include_router(sso_router)
+app.include_router(anomaly_router)
