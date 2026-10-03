@@ -39,8 +39,6 @@ from pydantic import BaseModel, EmailStr, Field
 from pydantic_settings import BaseSettings
 
 from security_hardening import SecurityHeadersMiddleware, forwarded_client_ip
-from sso import sso_router
-from anomaly import anomaly_router
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -115,6 +113,8 @@ client = AsyncIOMotorClient(settings.MONGO_URL, **mongo_kwargs)
 db = client[settings.DB_NAME]
 
 api_router = APIRouter(prefix="/api")
+from sso import sso_router
+from anomaly import anomaly_router
 
 
 # ─────────────────────────────────────────────────────────────────────────────
