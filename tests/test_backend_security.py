@@ -1,4 +1,7 @@
 import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
 os.environ.update({
     "MONGO_URL": "mongodb://localhost:27017",
@@ -33,7 +36,7 @@ def test_security_headers_middleware_is_registered():
 
 
 def test_proxy_ip_ignores_untrusted_forwarded_header():
-    from backend.security_hardening import forwarded_client_ip
+    from security_hardening import forwarded_client_ip
     from starlette.requests import Request
 
     scope = {
