@@ -6,3 +6,12 @@ bcrypt==4.1.3
 pydantic==2.7.1
 pydantic[email]==2.7.1
 python-multipart==0.0.9
+pydantic-settings==2.2.1
+
+# --- Federated SSO (optional; required when SAML_ENABLED / OIDC_ENABLED) ---
+# OIDC: discovery + code flow via Authlib
+authlib==1.3.2
+httpx==0.27.0
+itsdangerous==2.2.0
+# SAML 2.0 SP (needs system libs: libxml2-dev libxmlsec1-dev libxmlsec1-openssl)
+python3-saml==1.16.0
