@@ -26,6 +26,37 @@ from config import (
 from database import db
 from security_hardening import forwarded_client_ip
 
+JWT_ALGORITHM = "HS256"
+JWT_ACTIVE_KID = "current"
+JWT_PREVIOUS_KID = "previous"
+
+
+def _jwt_keys() -> dict[str, str]:
+    keys = {JWT_ACTIVE_KID: settings.JWT_SECRET}
+    if settings.JWT_PREVIOUS_SECRET:
+        keys[JWT_PREVIOUS_KID] = settings.JWT_PREVIOUS_SECRET
+    return keys
+
+
+def encode_jwt(payload: dict) -> str:
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=JWT_ALGORITHM, headers={"kid": JWT_ACTIVE_KID})
+
+
+def decode_jwt(token: str, verify_exp: bool = True) -> dict:
+    header = jwt.get_unverified_header(token)
+    kid = header.get("kid")
+    keys = _jwt_keys()
+    candidates = [keys[kid]] if kid in keys else list(keys.values())
+    last_error = None
+    for key in candidates:
+        try:
+            return jwt.decode(token, key, algorithms=[JWT_ALGORITHM], options={"verify_exp": verify_exp})
+        except jwt.InvalidTokenError as exc:
+            last_error = exc
+    if last_error:
+        raise last_error
+    raise jwt.InvalidTokenError("No JWT verification key configured")
+
 
 # ── Password ────────────────────────────────────────────────────────────────
 
@@ -73,15 +104,13 @@ def verify_totp(secret_b32: str, code: str) -> bool:
 
 
 def create_mfa_pending_token(user_id: str) -> str:
-    return jwt.encode(
+    return encode_jwt(
         {
             "sub": user_id,
             "type": "mfa_pending",
             "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
             "iat": datetime.now(timezone.utc),
         },
-        settings.JWT_SECRET,
-        algorithm="HS256",
     )
 
 
@@ -131,7 +160,7 @@ def create_access_token(user_id: str, email: str, role: str, tenant: str, sessio
         "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_MINUTES),
         "iat": datetime.now(timezone.utc),
     }
-    return jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
+    return encode_jwt(payload)
 
 
 def create_refresh_token(user_id: str, session_id: str, jti: str) -> str:
