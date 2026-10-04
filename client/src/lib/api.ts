@@ -9,12 +9,8 @@ export async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
     'Content-Type': 'application/json',
     ...(opts.headers as Record<string, string>)
   };
-  const token = getToken();
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-
-  const res = await fetch(`${API}${path}`, { ...opts, headers });
+  const res = await fetch(`${API}${path}`, { ...opts, headers, credentials: 'include' });
   if (res.status === 401) {
-    localStorage.removeItem('aegis_token');
     localStorage.removeItem('aegis_user');
     window.location.href = '/login';
     throw new Error('Unauthorized');
@@ -28,11 +24,13 @@ export async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
 
 export const auth = {
   login: (email: string, password: string) =>
-    api<{ token: string; user: import('../types').User }>('/auth/login', {
+    api<{ mfaRequired?: boolean; user: import('../types').User }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password })
     }),
   me: () => api<import('../types').User>('/auth/me'),
+  mfaSetup: () => api<{ secret: string; otpauth: string }>('/auth/mfa/setup'),
+  mfaVerify: (code: string) => api<{ user: import('../types').User }>('/auth/mfa/verify', { method: 'POST', body: JSON.stringify({ code }) }),
   logout: () => api('/auth/logout', { method: 'POST' })
 };
 
