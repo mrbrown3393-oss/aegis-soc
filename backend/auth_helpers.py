@@ -139,7 +139,7 @@ def pending_user(request: Request) -> dict:
     if not token:
         raise HTTPException(status_code=401, detail="MFA verification required")
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
+        payload = decode_jwt(token)
         if payload.get("type") != "mfa_pending":
             raise HTTPException(status_code=401, detail="Invalid MFA session")
     except jwt.InvalidTokenError:
@@ -172,7 +172,7 @@ def create_refresh_token(user_id: str, session_id: str, jti: str) -> str:
         "exp": datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_DAYS),
         "iat": datetime.now(timezone.utc),
     }
-    return jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
+    return encode_jwt(payload)
 
 
 async def create_auth_session(user_id: str) -> tuple[str, str]:
