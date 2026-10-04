@@ -1028,6 +1028,10 @@ async def list_audit_logs(tenant: Optional[str] = None, limit: int = 100, user: 
 # Users (owner / admin only)
 # ─────────────────────────────────────────────────────────────────────────────
 
+def validate_invite_authorization(user: dict, body: UserInvite) -> None:
+    validate_invite_authorization(user, body)
+
+
 @api_router.get("/users")
 async def list_users(user: dict = Depends(require_role("owner", "admin"))):
     users = await db.users.find(tenant_filter(user), {"_id": 0, "password_hash": 0}).to_list(100)
