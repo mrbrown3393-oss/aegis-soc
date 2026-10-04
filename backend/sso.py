@@ -5,7 +5,7 @@ import base64
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
 import jwt
@@ -45,6 +45,14 @@ def _issuer() -> str:
     return settings.OIDC_ISSUER_URL.rstrip("/")
 
 
+def _trusted_provider_endpoint(value: str) -> str:
+    parsed = urlparse(value)
+    issuer = urlparse(_issuer())
+    if parsed.scheme != "https" or parsed.hostname != issuer.hostname:
+        raise HTTPException(503, "OIDC provider endpoint is not trusted")
+    return value
+
+
 async def _discovery() -> dict:
     if not _configured():
         raise HTTPException(503, "OIDC is not completely configured")
@@ -60,6 +68,8 @@ async def _discovery() -> dict:
     required = {"authorization_endpoint", "token_endpoint", "jwks_uri"}
     if not required.issubset(data):
         raise HTTPException(503, "OIDC provider metadata is incomplete")
+    for field in ("authorization_endpoint", "token_endpoint", "jwks_uri"):
+        data[field] = _trusted_provider_endpoint(str(data[field]))
     return data
 
 
@@ -225,6 +235,8 @@ async def oidc_callback(request: Request):
     user = await db.users.find_one({"oidc_issuer": _issuer(), "oidc_sub": subject})
     if not user:
         user = await db.users.find_one({"email": email})
+        if user and not settings.OIDC_ALLOW_EMAIL_LINKING:
+            raise HTTPException(403, "Existing account requires explicit OIDC provider linking")
     if user:
         if user.get("oidc_issuer") and user.get("oidc_issuer") != _issuer():
             raise HTTPException(403, "Account is bound to a different identity provider")
