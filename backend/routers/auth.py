@@ -16,6 +16,9 @@ from auth_helpers import (
     legacy_mfa_secret,
     verify_totp,
     create_mfa_pending_token,
+    create_mfa_challenge,
+    consume_mfa_challenge,
+    invalidate_mfa_challenges,
     set_mfa_pending_cookie,
     clear_mfa_pending_cookie,
     pending_user,
@@ -86,7 +89,9 @@ async def login(body: LoginRequest, request: Request, response: Response):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     await clear_failed_attempts(ip, body.email)
     if settings.MFA_REQUIRED:
-        set_mfa_pending_cookie(response, create_mfa_pending_token(user["id"]))
+        await invalidate_mfa_challenges(user["id"])
+        challenge_id = await create_mfa_challenge(user["id"])
+        set_mfa_pending_cookie(response, create_mfa_pending_token(user["id"], challenge_id))
         return {
             "message": "MFA verification required",
             "mfaRequired": True,
@@ -105,7 +110,7 @@ async def login(body: LoginRequest, request: Request, response: Response):
 
 @router.get("/auth/mfa/setup")
 async def mfa_setup(request: Request):
-    payload = pending_user(request)
+    payload = await pending_user(request)
     user = await db.users.find_one({"id": payload["sub"]})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
@@ -164,6 +169,9 @@ async def mfa_verify(body: dict, request: Request, response: Response):
         raise HTTPException(status_code=409, detail="MFA setup required")
 
     await clear_mfa_failures(ip, user["id"])
+    if not await consume_mfa_challenge(payload["cid"], user["id"]):
+        clear_mfa_pending_cookie(response)
+        raise HTTPException(status_code=401, detail="MFA challenge already used or expired")
     if not user.get("mfaEnrolledAt"):
         await db.users.update_one(
             {"id": user["id"], "mfa_secret_enc": {"$exists": True}},
