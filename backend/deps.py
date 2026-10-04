@@ -7,7 +7,7 @@ from typing import Optional
 import jwt
 from fastapi import Depends, HTTPException, Request, status
 
-from auth_helpers import active_session
+from auth_helpers import active_session, enforce_authenticated_rate_limit
 from config import settings
 from database import db
 from security_hardening import forwarded_client_ip
@@ -29,6 +29,8 @@ async def get_current_user(request: Request) -> dict:
 
     if not await active_session(payload["sid"], payload["sub"]):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session revoked or expired")
+    ip = forwarded_client_ip(request, settings.TRUSTED_PROXY_IPS)
+    await enforce_authenticated_rate_limit(ip, payload["sub"])
     user = await db.users.find_one({"id": payload["sub"]})
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
