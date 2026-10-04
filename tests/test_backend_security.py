@@ -132,10 +132,11 @@ def test_totp_accepts_current_and_adjacent_time_step(monkeypatch):
     monkeypatch.setattr(settings, "MFA_MASTER_SECRET", "m" * 64)
     monkeypatch.setattr(settings, "AEGIS_ENV", "test")
     secret = mfa_secret("test-user")
-    code = totp(secret, 1_000_000)
-    assert verify_totp(secret, code)
-    assert verify_totp(secret, totp(secret, 1_000_030))
-    assert not verify_totp(secret, "000000")
+    timestamp = 1_000_000
+    code = totp(secret, timestamp)
+    assert verify_totp(secret, code, timestamp=timestamp)
+    assert verify_totp(secret, totp(secret, timestamp + 30), timestamp=timestamp)
+    assert not verify_totp(secret, "000000", timestamp=timestamp)
 
 
 
@@ -246,7 +247,9 @@ def test_telemetry_fusion_requires_operator_role():
 
     dependency = next(
         dep for dep in app.routes
-        if dep.path == "/api/security/telemetry/fuse" and hasattr(dep, "dependant")
+        if hasattr(dep, "path")
+        and dep.path == "/api/security/telemetry/fuse"
+        and hasattr(dep, "dependant")
     )
     dependency_calls = [getattr(d.call, "__name__", "") for d in dependency.dependant.dependencies]
     assert "_checker" in dependency_calls
