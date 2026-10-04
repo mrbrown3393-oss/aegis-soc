@@ -134,8 +134,8 @@ async def mfa_setup(request: Request):
 
 @router.post("/auth/mfa/verify")
 async def mfa_verify(body: dict, request: Request, response: Response):
-    payload = pending_user(request)
-    ip = forwarded_client_ip(request, settings.TRUSTED_PROXY_IPS)
+    payload = await pending_user(request)
+    ip = forwarded_client_ip(request, settings.TRUSTED_PROXY_IPS
     await check_mfa_lockout(ip, payload["sub"])
     user = await db.users.find_one({"id": payload["sub"]})
     if not user:
