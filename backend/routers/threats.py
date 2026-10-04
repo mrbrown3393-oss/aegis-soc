@@ -6,7 +6,7 @@ import random
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from database import db
 from deps import get_current_user, require_role, tenant_filter
@@ -16,7 +16,7 @@ router = APIRouter(tags=["threats"])
 
 @router.get("/threats")
 async def list_threats(
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=100),
     severity: Optional[str] = None,
     tenant: Optional[str] = None,
     user: dict = Depends(get_current_user),
