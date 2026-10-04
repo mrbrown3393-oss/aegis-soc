@@ -25,12 +25,11 @@ jobs:
       - run: npm install --ignore-scripts --no-audit --no-fund
       - run: cd client && npm install --ignore-scripts --no-audit --no-fund
       - run: npx @cyclonedx/cyclonedx-npm --output-file sbom-node.json --output-format JSON
-      - if: github.event_name == 'pull_request'
-        uses: actions/dependency-review-action@v4
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: pip-audit -r backend/requirements.txt
+      - run: npm audit --audit-level=high --omit=dev
       - uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
