@@ -5,6 +5,7 @@ export interface User {
   email: string;
   name: string;
   role: Role;
+  tenant?: 'government' | 'private' | 'saas';
   department?: string;
   mfaEnabled?: boolean;
   lastLogin?: string;
