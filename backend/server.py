@@ -493,6 +493,13 @@ class RegisterRequest(BaseModel):
     password: str = Field(min_length=12, max_length=72)
     name: str = Field(min_length=1, max_length=100)
 
+    @field_validator("password")
+    @classmethod
+    def validate_password_bytes(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must be at most 72 UTF-8 bytes")
+        return value
+
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -506,6 +513,13 @@ class PasswordResetRequest(BaseModel):
 class PasswordResetConfirm(BaseModel):
     token: str
     new_password: str = Field(min_length=12, max_length=72)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_bytes(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must be at most 72 UTF-8 bytes")
+        return value
 
 
 class IncidentUpdate(BaseModel):
