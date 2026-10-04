@@ -17,7 +17,7 @@ from config import settings
 from database import db
 from deps import write_audit
 
-router = APIRouter(prefix="/api/auth/sso", tags=["federated-sso"])
+sso_router = APIRouter(prefix="/api/auth/sso", tags=["federated-sso"])
 
 _STATE_TTL = timedelta(minutes=10)
 _HTTP_TIMEOUT = httpx.Timeout(5.0, connect=5.0)
@@ -153,7 +153,7 @@ async def oidc_login():
 
     await db.sso_oidc_states.insert_one({
         "state_hash": _sha256(state),
-        "nonce_hash": _sha256(nonce),
+        "nonce": nonce,
         "code_verifier": verifier,
         "expires_at": expires,
         "used": False,
@@ -188,11 +188,7 @@ async def oidc_callback(request: Request):
     )
     if not record:
         raise HTTPException(401, "Invalid or expired OIDC state")
-    # The nonce is intentionally retained only as a hash; the provider nonce is
-    # validated against the state record by storing the original nonce encrypted
-    # in the application configuration is not acceptable. Use a one-time nonce
-    # derived from a server secret and state instead.
-    nonce = _b64(hashlib.sha256(f"{state}:{settings.JWT_SECRET}".encode()).digest())
+    nonce = record["nonce"]
     verifier = record["code_verifier"]
 
     metadata = await _discovery()
