@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
-from server import db, require_role, tenant_filter, write_audit
+from server import db, get_current_user, require_role, tenant_filter, write_audit
 
 anomaly_router = APIRouter(prefix="/api/security", tags=["security-analytics"])
 
