@@ -244,8 +244,11 @@ def test_telemetry_fusion_requires_operator_role():
         dep for dep in app.routes
         if dep.path == "/api/security/telemetry/fuse" and hasattr(dep, "dependant")
     )
-    dependency_names = {
-        getattr(d.call, "__name__", "")
-        for d in dependency.dependant.dependencies
-    }
-    assert "get_current_user" not in dependency_names or "require_role_dependency" in dependency_names
+    dependency_calls = [getattr(d.call, "__name__", "") for d in dependency.dependant.dependencies]
+    assert "_checker" in dependency_calls
+    checker = next(d.call for d in dependency.dependant.dependencies if getattr(d.call, "__name__", "") == "_checker")
+    assert checker.__closure__ is not None
+    assert any(
+        cell.cell_contents == ("owner", "admin", "analyst")
+        for cell in checker.__closure__
+    )
