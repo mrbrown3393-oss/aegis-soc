@@ -1029,7 +1029,11 @@ async def list_audit_logs(tenant: Optional[str] = None, limit: int = 100, user: 
 # ─────────────────────────────────────────────────────────────────────────────
 
 def validate_invite_authorization(user: dict, body: UserInvite) -> None:
-    validate_invite_authorization(user, body)
+    """Enforce tenant and role boundaries for user invitations."""
+    if user["role"] != "owner" and body.tenant != user["tenant"]:
+        raise HTTPException(status_code=403, detail="Cannot invite users into another tenant")
+    if user["role"] != "owner" and body.role == "owner":
+        raise HTTPException(status_code=403, detail="Only the owner can grant the owner role")
 
 
 @api_router.get("/users")
