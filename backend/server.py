@@ -1,23 +1,21 @@
 """
 Aegis SOC — FastAPI application entrypoint.
 
-Security posture (see SECURITY_DOSSIER.md for full control mapping):
+Security posture:
 - bcrypt cost 12, per-password salt
 - JWT access (15m) + rotating refresh (7d) in httpOnly, secure, SameSite cookies
 - Brute-force lockout: 5 failed attempts per {ip}:{email} → 15-min lockout
-- Tenant isolation via tenant_filter() — non-privileged users hard-scoped
-- Audit trail on every mutating action (actor, action, resource, ip, tenant, timestamp)
-- Pydantic v2 validation on all request bodies; Literal enums for status/severity/tenant
-- Parameterized MongoDB queries (motor) — no string concatenation
-- Account enumeration prevention: generic "Invalid email or password"
-- Owner protected from deletion
-- Secrets loaded from environment only; never logged
+- Zero Trust: protected API routes fail closed without authentication
+- Zero Trust: server-side session revalidation and device-context binding
+- Tenant isolation via tenant_filter() with explicit cross-tenant scope
+- Audit trail with request correlation IDs
+- Pydantic v2 validation and parameterized MongoDB queries
+- Secrets loaded from environment only
 
-Honest non-claims (per dossier honesty guardrails):
-- httpOnly prevents JS from reading the raw token, but a successful XSS could still
-  make authenticated requests via the cookie. We do NOT claim immunity to XSS.
-- Tenant isolation is logical/query-level today; database-level isolation is PLANNED.
-- No blanket "immune to X" claims anywhere.
+Honest non-claims:
+- httpOnly does not make the application XSS-immune.
+- Tenant isolation remains logical/query-level, not database-level.
+- FedRAMP/CMMC/ISO/SOC 2/etc. certification is not claimed by this code alone.
 """
 from __future__ import annotations
 
@@ -29,16 +27,11 @@ from fastapi.responses import JSONResponse
 
 from config import settings, validate_security_settings, allowed_csrf_origins
 from security_hardening import SecurityHeadersMiddleware
+from zero_trust import ZeroTrustMiddleware
 from seed import run_startup
 
-# Re-export symbols that sso.py / anomaly.py currently import from server
 from database import client, db  # noqa: F401
-from deps import (  # noqa: F401
-    get_current_user,
-    require_role,
-    tenant_filter,
-    write_audit,
-)
+from deps import get_current_user, require_role, tenant_filter, write_audit  # noqa: F401
 
 validate_security_settings()
 
@@ -70,6 +63,7 @@ async def csrf_origin_guard(request: Request, call_next):
     return await call_next(request)
 
 
+app.add_middleware(ZeroTrustMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
@@ -92,7 +86,6 @@ async def on_shutdown():
     await client.close()
 
 
-# ── Routers ─────────────────────────────────────────────────────────────────
 from routers.auth import router as auth_router
 from routers.metrics import router as metrics_router
 from routers.threats import router as threats_router
@@ -101,7 +94,6 @@ from routers.incidents import router as incidents_router
 from routers.resources import router as resources_router
 from routers.users import router as users_router
 
-# Existing modules (keep import path stable)
 from sso import sso_router
 from anomaly import anomaly_router
 
