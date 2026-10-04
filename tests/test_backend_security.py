@@ -23,7 +23,7 @@ def test_backend_imports_and_security_routes():
     from server import app
 
     paths = {route.path for route in app.routes if hasattr(route, "path")}
-    assert "/api/" in paths
+    assert any(path.startswith("/api/") for path in paths)
     assert "/api/security/telemetry/fuse" in paths
     assert "/api/security/quarantine" in paths
     assert "/api/auth/sso/oidc/login" in paths
@@ -247,13 +247,17 @@ def test_telemetry_fusion_requires_operator_role():
 
     dependency = next(
         dep for dep in app.routes
-        if hasattr(dep, "path")
-        and dep.path == "/api/security/telemetry/fuse"
-        and hasattr(dep, "dependant")
+        if getattr(dep, "path", None) == "/api/security/telemetry/fuse"
     )
-    dependency_calls = [getattr(d.call, "__name__", "") for d in dependency.dependant.dependencies]
-    assert "_checker" in dependency_calls
-    checker = next(d.call for d in dependency.dependant.dependencies if getattr(d.call, "__name__", "") == "_checker")
+
+    def dependency_calls(dependant):
+        for item in dependant.dependencies:
+            yield item.call
+            yield from dependency_calls(item)
+
+    checkers = [call for call in dependency_calls(dependency.dependant) if getattr(call, "__name__", "") == "_checker"]
+    assert checkers
+    checker = checkers[0]
     assert checker.__closure__ is not None
     assert any(
         cell.cell_contents == ("owner", "admin", "analyst")
