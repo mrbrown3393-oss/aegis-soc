@@ -82,6 +82,12 @@ Nginx must be built with `ngx_http_auth_request_module`; the module authorizes a
 request from the status of an internal subrequest and can expose its upstream
 response headers through `auth_request_set`.
 
+## Phase 4: production trust hardening
+
+Phase 4 tightens the service-to-service trust boundary. Malformed base64 edge decisions are rejected without reaching JSON parsing. Production edge deployments fail closed when `EDGE_INGRESS_TOKEN` is missing or shorter than 32 characters, while invalid credentials receive 401. The backend production validator also requires a strong ingress credential whenever edge enforcement is enabled.
+
+The ingress credential is separate from `EDGE_SIGNING_SECRET` and `EDGE_VERIFY_SECRET`. It authenticates the caller to the edge; it does not authorize an Aegis user and must never be exposed to clients.
+
 ## Deployment requirements
 
 Set EDGE_SIGNING_SECRET to a randomly generated secret of at least 32 characters. Do not reuse JWT, MFA, database or application secrets.
