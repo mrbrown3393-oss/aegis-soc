@@ -94,7 +94,7 @@ server.on('upgrade', (req, socket, head) => {
     const i = v.indexOf('=');
     return [v.slice(0, i).trim(), decodeURIComponent(v.slice(i + 1).trim())];
   }));
-  const token = cookies['__Host-aegis_session'];
+  const token = cookies[config.SESSION_COOKIE];
   try {
     const payload = jwt.verify(token, config.JWT_SECRET, { algorithms: ['HS256'], issuer: 'aegis-soc', audience: 'aegis-soc-api' });
     const user = store.users.find(u => u.id === payload.sub);
