@@ -51,6 +51,37 @@ The intended production flow is:
 
 This preserves the Zero Trust rule that the edge can reduce trust, but it cannot grant application authorization.
 
+## Phase 3: trusted ingress enforcement
+
+Phase 3 adds a concrete Nginx integration using the standard auth_request module. The
+ingress performs an internal subrequest to the edge before proxying traffic to Aegis.
+A 204 response permits the request; an edge deny (403) or edge failure blocks the
+request before the application is reached. Nginx then copies only the signed decision
+headers returned by the trusted edge into the upstream Aegis request.
+
+The reference template is `ops/ingress/nginx-edge.template.conf`. It deliberately:
+
+1. Clears client-supplied `X-Aegis-Edge-*` headers.
+2. Sends the original method, normalized URI path, and connection client IP to the edge.
+3. Authenticates the ingress-to-edge call with `EDGE_INGRESS_TOKEN` when rendered.
+4. Copies the edge's signed decision, signature, and client IP into the Aegis request.
+5. Fails closed when the edge returns 401/403 or an unexpected status.
+6. Keeps the edge endpoint internal and does not expose it as a public route.
+
+The backend continues to verify the signed decision, so the ingress is not an
+authorization authority. The signed decision is bound to the path rather than the
+query string because Aegis verifies `request.url.path`; query parameters remain
+available to the application independently.
+
+The template assumes Nginx is the public TLS terminator and that `$remote_addr`
+represents the real client address. If another load balancer sits in front of Nginx,
+configure Nginx's real-IP trust list with only that load balancer's documented
+source networks. Never trust an arbitrary client-supplied forwarding header.
+
+Nginx must be built with `ngx_http_auth_request_module`; the module authorizes a
+request from the status of an internal subrequest and can expose its upstream
+response headers through `auth_request_set`. citeturn1view0
+
 ## Deployment requirements
 
 Set EDGE_SIGNING_SECRET to a randomly generated secret of at least 32 characters. Do not reuse JWT, MFA, database or application secrets.
