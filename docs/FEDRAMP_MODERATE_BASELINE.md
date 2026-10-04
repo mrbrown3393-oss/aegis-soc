@@ -1,13 +1,15 @@
 # Aegis SOC — FedRAMP Moderate Baseline Mapping
 
-**Document version**: 1.0  
+**Document version**: 1.1  
 **Platform version**: v2.1.0  
-**Aligned to**: `SECURITY_DOSSIER.md` v1.1 · `NIST_ALIGNMENT.md` v1.0 (2026-10-04)  
+**Aligned to**: `SECURITY_DOSSIER.md` v1.1 · `NIST_ALIGNMENT.md` v1.0 · `docs/FEDRAMP_CRM_AND_PARAMETERS.md` v1.0 (2026-10-04)  
 **Owner**: William Brown (`william.brown@aegis-soc.io`)  
 **Classification**: UNCLASSIFIED — Shareable under NDA for buyer / investor / contracting diligence
 
 > **This is not a System Security Plan, not a FedRAMP package, and not an Authorization to Operate (ATO).**  
 > It maps Aegis SOC’s *current engineering posture* against the **FedRAMP Moderate** control baseline (NIST SP 800-53 Revision 5, as selected for Moderate impact) so a buyer CISO, 3PAO, or agency assessor can see readiness and residual gaps honestly.
+
+**CRM & parameters:** `docs/FEDRAMP_CRM_AND_PARAMETERS.md` — who implements each control and organization-defined parameter values.
 
 ---
 
@@ -22,6 +24,7 @@
 | Impact level | Confidentiality **Moderate** · Integrity **Moderate** · Availability **Moderate** (design target) |
 | Inheritance model | **Customer / CSP shared**: physical (PE), facility, underlying IaaS/PaaS boundary, and agency-specific continuous monitoring are **inherited or customer-responsible** unless Aegis operates the hosting stack under contract |
 | Status taxonomy | Same as dossier: **IMPLEMENTED** · **PARTIAL** · **PLANNED** · **NOT APPLICABLE** / **INHERITED** |
+| CRM / parameters | `docs/FEDRAMP_CRM_AND_PARAMETERS.md` |
 
 ### 1.2 Honest readiness
 
@@ -33,7 +36,8 @@
 | Primary remaining blockers | Buyer encryption-key ops + restore drill; complete enterprise SSO; formal BCP/DR + ConMon; database-level tenant isolation for high-side; independent assessment (3PAO) |
 
 Detailed POA&M: `SECURITY_DOSSIER.md` §10.  
-Control-by-control 800-53 appendix: `NIST_ALIGNMENT.md`.
+Control-by-control 800-53 appendix: `NIST_ALIGNMENT.md`.  
+Customer responsibility & parameters: `docs/FEDRAMP_CRM_AND_PARAMETERS.md`.
 
 ---
 
@@ -97,7 +101,7 @@ FedRAMP Moderate selects a large subset of 800-53 Rev 5 controls and enhancement
 
 ## 4. Priority FedRAMP Moderate controls (application boundary)
 
-The following are high-visibility Moderate controls for a SaaS application. Status mirrors `NIST_ALIGNMENT.md` and dossier v1.1.
+The following are high-visibility Moderate controls for a SaaS application. Status mirrors `NIST_ALIGNMENT.md` and dossier v1.1. For **who implements each control** and **parameter values**, see `docs/FEDRAMP_CRM_AND_PARAMETERS.md`.
 
 ### 4.1 Access Control (AC)
 
@@ -204,6 +208,8 @@ The following are high-visibility Moderate controls for a SaaS application. Stat
 
 ## 6. Inheritance and shared responsibility
 
+High-level summary. **Authoritative CRM:** `docs/FEDRAMP_CRM_AND_PARAMETERS.md`.
+
 | Control area | Aegis | Customer / CSP |
 | --- | --- | --- |
 | Application authn/z, MFA, RBAC, tenancy (logical) | **Responsible** | Configure IdP / users |
@@ -242,6 +248,7 @@ Estimated remaining internal engineering after Phase A: see dossier POA&M (~28 P
 | Full dossier + POA&M | `SECURITY_DOSSIER.md` |
 | NIST 800-53 appendix | `NIST_ALIGNMENT.md` |
 | This baseline map | `docs/FEDRAMP_MODERATE_BASELINE.md` |
+| **CRM & parameter register** | **`docs/FEDRAMP_CRM_AND_PARAMETERS.md`** |
 | Policy pack | `docs/SECURITY_POLICY_PACK.md` |
 | Incident response plan | `docs/INCIDENT_RESPONSE_PLAN.md` |
 | MongoDB encryption/TLS runbook | `ops/mongodb/` |
@@ -266,6 +273,7 @@ Estimated remaining internal engineering after Phase A: see dossier POA&M (~28 P
 
 | Version | Date | Change | Author |
 | --- | --- | --- | --- |
+| 1.1 | 2026-10-04 | Linked CRM and organization-defined parameter register. | William Brown / Grok |
 | 1.0 | 2026-10-04 | Initial FedRAMP Moderate baseline mapping aligned to dossier v1.1 and NIST appendix v1.0. | William Brown / Grok |
 
 ---
