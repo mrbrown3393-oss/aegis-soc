@@ -71,6 +71,9 @@ class Settings(BaseSettings):
     OIDC_CLIENT_ID: str = ""
     OIDC_CLIENT_SECRET: str = ""
     OIDC_SCOPES: str = "openid profile email"
+    AEGIS_ENV: str = "development"
+    CORS_ALLOW_METHODS: str = "GET,POST,PATCH,DELETE,OPTIONS"
+    CORS_ALLOW_HEADERS: str = "Content-Type,Authorization,X-Requested-With"
 
     class Config:
         env_file = ".env"
@@ -78,6 +81,30 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def validate_security_settings() -> None:
+    """Fail closed on unsafe production defaults before the API starts."""
+    if settings.AEGIS_ENV.lower() != "production":
+        return
+    if settings.JWT_SECRET == "change-me-to-a-64-char-hex-string" or len(settings.JWT_SECRET) < 32:
+        raise RuntimeError("Production requires a strong JWT_SECRET of at least 32 characters.")
+    if settings.ADMIN_PASSWORD == "change-me" or settings.ANALYST_PASSWORD == "change-me":
+        raise RuntimeError("Production requires non-default operator passwords.")
+    if not settings.MONGO_TLS:
+        raise RuntimeError("Production requires MongoDB TLS.")
+    if settings.MONGO_TLS_ALLOW_INVALID_CERTS:
+        raise RuntimeError("Production cannot allow invalid MongoDB TLS certificates.")
+    origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+    if "*" in origins:
+        raise RuntimeError("Production CORS cannot use wildcard origins.")
+    if not origins or not settings.FRONTEND_URL.strip():
+        raise RuntimeError("Production requires an explicit frontend/CORS origin.")
+    if not settings.FRONTEND_URL.lower().startswith("https://"):
+        raise RuntimeError("Production FRONTEND_URL must use HTTPS.")
+
+
+validate_security_settings()
 
 ACCESS_TOKEN_MINUTES = 12 * 60
 REFRESH_TOKEN_DAYS = 7
@@ -95,10 +122,12 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()] + [settings.FRONTEND_URL],
+    allow_origins=list(dict.fromkeys(
+        [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()] + [settings.FRONTEND_URL]
+    )),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=[m.strip().upper() for m in settings.CORS_ALLOW_METHODS.split(",") if m.strip()],
+    allow_headers=[h.strip() for h in settings.CORS_ALLOW_HEADERS.split(",") if h.strip()],
 )
 
 mongo_kwargs = {

@@ -13,10 +13,10 @@
 
 ## What Is Aegis SOC
 
-Aegis SOC is a modular, enterprise-grade cybersecurity platform that unifies threat detection, incident response, vulnerability management, asset intelligence, continuous compliance, and immutable audit — in a single multi-tenant console with three sovereign deployment postures: **Government**, **Private Sector**, and **SaaS**.
+Aegis SOC is a modular, enterprise cybersecurity platform that unifies threat detection, incident response, vulnerability management, asset intelligence, continuous compliance, and append-oriented audit — in a single multi-tenant console with three sovereign deployment postures: **Government**, **Private Sector**, and **SaaS**.
 
 - **Operator-first.** Dense, high-signal UI designed for tier-1 analysts.
-- **Tenant-isolated.** Three distinct visual + logical tenants — switch at the sidebar, every query is scoped.
+- **Tenant-isolated.** Three visual + logical tenant postures with backend query scoping.
 - **Commercially flexible.** Sell outright, rent monthly, or license to government.
 - **Automatable.** Every endpoint prefixed `/api`; cookies are httpOnly; JWT is standard.
 
@@ -24,12 +24,12 @@ Aegis SOC is a modular, enterprise-grade cybersecurity platform that unifies thr
 
 ### 1. Government
 - **Vibe**: authoritative navy / steel · Accent: `#60a5fa`
-- **Compliance baseline**: FedRAMP Moderate · CMMC Level 2 · FIPS 140-3 · STIG-hardened
+- **Target control baseline**: FedRAMP Moderate · CMMC Level 2 · FIPS 140-3 · STIG-aligned. Certification is not claimed.
 - **Suited for**: federal agencies, state/local government, defense primes, intelligence community
 
 ### 2. Private Sector
 - **Vibe**: corporate warm / amber · Accent: `#f5b041`
-- **Compliance baseline**: SOC 2 Type II · ISO 27001:2022 · PCI-DSS 4.0 · HIPAA
+- **Target control baseline**: SOC 2 Type II · ISO 27001:2022 · PCI-DSS 4.0 · HIPAA. Certification is not claimed.
 - **Suited for**: Fortune 500 security teams, regulated financial / healthcare, growing enterprises
 
 ### 3. SaaS Platform
@@ -43,9 +43,9 @@ Aegis SOC is a modular, enterprise-grade cybersecurity platform that unifies thr
 | --- | --- | --- |
 | 1 | **Overview** | Portfolio KPIs, 7-day trend, severity donut, live threat tape, active incidents |
 | 2 | **Threats** | Correlated SIEM-style events with severity, geo, confidence, source IP, affected asset |
-| 3 | **Vulnerabilities** | Real CVE catalog with CVSS 3.1 scores, patch-tracking per asset |
+| 3 | **Vulnerabilities** | CVE-referenced vulnerability catalog with CVSS scoring and patch-tracking per asset |
 | 4 | **Incidents** | Incident tickets with kill-chain phase, assignee, 4-step status workflow |
-| 5 | **Compliance** | Continuous control monitoring across NIST 800-53, ISO 27001, SOC 2, HIPAA, FedRAMP, PCI-DSS 4.0, CMMC L2 |
+| 5 | **Compliance** | Control monitoring across NIST 800-53, ISO 27001, SOC 2, HIPAA, FedRAMP, PCI-DSS 4.0, CMMC L2 |
 | 6 | **Assets** | Discovered endpoints, servers, firewalls, routers, DBs with per-asset risk score |
 | 7 | **Users** | Operators & RBAC — invite, assign role, remove |
 | 8 | **Audit Logs** | Immutable action trail with CSV export |
@@ -66,7 +66,7 @@ React 19 Frontend (CRA)  --axios, httpOnly JWT cookies-->  FastAPI Backend (/api
 - **Auth**: Access JWT (12h) + refresh JWT (7d) in `secure`, `httpOnly`, `samesite=none` cookies.
 - **Password hashing**: `bcrypt` (cost 12).
 - **Brute-force protection**: 5 failed attempts per `{ip}:{email}` triggers a 15-min lockout.
-- **Audit**: Every mutating action is appended to `audit_logs` with actor, IP, resource, and tenant.
+- **Audit**: Mutating actions are appended to `audit_logs` with actor, IP, resource, and tenant.
 - **Mock data seeder**: Idempotent — runs once on startup and skips if data already exists.
 
 ## Tech Stack
@@ -120,22 +120,22 @@ uvicorn server:app --host 0.0.0.0 --port 8001 --reload
 
 ```bash
 curl http://localhost:8001/api/
+# Create your own local credentials in .env, then use them with the login endpoint.
 curl -c c.txt -X POST http://localhost:8001/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"william.brown@aegis-soc.io","password":"AegisOwner2025!"}'
+  -d '{"email":"YOUR_ADMIN_EMAIL","password":"YOUR_ADMIN_PASSWORD"}'
 curl -b c.txt "http://localhost:8001/api/metrics/overview?tenant=all"
 ```
 
 ## Environment Variables
 
-See `backend/.env.example`. All secrets load from environment — never hardcoded.
+See `backend/.env.example`. Secrets must be supplied through the environment or an external secret manager; production startup rejects unsafe defaults.
 
-## Default Credentials (DEMO ONLY — rotate before any non-demo deployment)
+## Credentials and production safety
 
-| Role | Email | Password | Tenant |
-| --- | --- | --- | --- |
-| **Owner** | `william.brown@aegis-soc.io` | `AegisOwner2025!` | `saas` (sees all) |
-| Analyst | `analyst@aegis-soc.io` | `Analyst2025!` | `government` |
+No working demo passwords are published in this repository. Set `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ANALYST_EMAIL`, and `ANALYST_PASSWORD` in your local environment before starting the API.
+
+Set `AEGIS_ENV=production` for production deployments. In production, startup fails closed if the JWT secret is weak/default, operator passwords are default, MongoDB TLS is disabled, invalid MongoDB certificates are allowed, CORS uses a wildcard, or the frontend origin is not HTTPS.
 
 ## API Reference
 
@@ -200,10 +200,10 @@ Seeding is **idempotent**. To re-seed, drop the collections and restart.
 
 - Passwords hashed with bcrypt (never plaintext).
 - JWTs in httpOnly cookies.
-- CORS origin-whitelisted (not `*`) with `allow_credentials=true`.
+- CORS uses explicit, configurable origins, methods, and headers; wildcard origins are rejected in production.
 - Unique index on `users.email`; TTL indexes on reset tokens and login attempts.
 - Brute-force lockout on login.
-- All mutating actions logged to the immutable audit trail.
+- Mutating actions logged to the append-oriented audit trail.
 - Role gating enforced server-side.
 - No secrets in source; `.env` excluded from version control.
 

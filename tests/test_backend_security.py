@@ -14,6 +14,7 @@ os.environ.update({
     "FRONTEND_URL": "http://localhost:3000",
     "CORS_ORIGINS": "http://localhost:3000",
     "MONGO_TLS": "false",
+    "AEGIS_ENV": "test",
 })
 
 
@@ -52,3 +53,37 @@ def test_proxy_ip_ignores_untrusted_forwarded_header():
     request = Request(scope)
     assert forwarded_client_ip(request, "10.0.0.0/8") == "198.51.100.20"
     assert forwarded_client_ip(request, "198.51.100.0/24") == "203.0.113.10"
+
+
+def test_production_rejects_unsafe_defaults(monkeypatch):
+    from server import settings, validate_security_settings
+
+    monkeypatch.setattr(settings, "AEGIS_ENV", "production")
+    monkeypatch.setattr(settings, "JWT_SECRET", "change-me-to-a-64-char-hex-string")
+    monkeypatch.setattr(settings, "ADMIN_PASSWORD", "change-me")
+    monkeypatch.setattr(settings, "ANALYST_PASSWORD", "change-me")
+    monkeypatch.setattr(settings, "MONGO_TLS", True)
+    monkeypatch.setattr(settings, "MONGO_TLS_ALLOW_INVALID_CERTS", False)
+    monkeypatch.setattr(settings, "CORS_ORIGINS", "https://console.example.com")
+    monkeypatch.setattr(settings, "FRONTEND_URL", "https://console.example.com")
+
+    import pytest
+    with pytest.raises(RuntimeError, match="strong JWT_SECRET"):
+        validate_security_settings()
+
+
+def test_production_rejects_wildcard_cors(monkeypatch):
+    from server import settings, validate_security_settings
+
+    monkeypatch.setattr(settings, "AEGIS_ENV", "production")
+    monkeypatch.setattr(settings, "JWT_SECRET", "x" * 64)
+    monkeypatch.setattr(settings, "ADMIN_PASSWORD", "real-production-password")
+    monkeypatch.setattr(settings, "ANALYST_PASSWORD", "real-production-password")
+    monkeypatch.setattr(settings, "MONGO_TLS", True)
+    monkeypatch.setattr(settings, "MONGO_TLS_ALLOW_INVALID_CERTS", False)
+    monkeypatch.setattr(settings, "CORS_ORIGINS", "*")
+    monkeypatch.setattr(settings, "FRONTEND_URL", "https://console.example.com")
+
+    import pytest
+    with pytest.raises(RuntimeError, match="wildcard origins"):
+        validate_security_settings()
