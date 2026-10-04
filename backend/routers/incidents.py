@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from database import db
 from deps import get_current_user, require_role, tenant_filter, write_audit
+from step_up import require_step_up
 from models import IncidentUpdate
 
 router = APIRouter(tags=["incidents"])
