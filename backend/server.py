@@ -3,7 +3,7 @@ Aegis SOC — FastAPI backend.
 
 Security posture (see SECURITY_DOSSIER.md for full control mapping):
 - bcrypt cost 12, per-password salt
-- JWT access (12h) + refresh (7d) in httpOnly, secure, samesite=none cookies
+- JWT access (15m) + rotating refresh (7d) in httpOnly, secure, SameSite cookies
 - Brute-force lockout: 5 failed attempts per {ip}:{email} → 15-min lockout
 - Tenant isolation via tenant_filter() — non-privileged users hard-scoped
 - Audit trail on every mutating action (actor, action, resource, ip, tenant, timestamp)
@@ -176,8 +176,9 @@ app.add_middleware(
 
 mongo_kwargs = {
     "tls": settings.MONGO_TLS,
-    "tlsAllowInvalidCertificates": settings.MONGO_TLS_ALLOW_INVALID_CERTS,
 }
+if settings.MONGO_TLS:
+    mongo_kwargs["tlsAllowInvalidCertificates"] = settings.MONGO_TLS_ALLOW_INVALID_CERTS
 if settings.MONGO_TLS_CA_FILE:
     if settings.MONGO_TLS:
         mongo_kwargs["tlsCAFile"] = settings.MONGO_TLS_CA_FILE
@@ -274,12 +275,13 @@ def _pending_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Invalid MFA session")
     return payload
 
-def create_access_token(user_id: str, email: str, role: str, tenant: str) -> str:
+def create_access_token(user_id: str, email: str, role: str, tenant: str, session_id: str) -> str:
     payload = {
         "sub": user_id,
         "email": email,
         "role": role,
         "tenant": tenant,
+        "sid": session_id,
         "type": "access",
         "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_MINUTES),
         "iat": datetime.now(timezone.utc),
@@ -287,14 +289,55 @@ def create_access_token(user_id: str, email: str, role: str, tenant: str) -> str
     return jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
 
 
-def create_refresh_token(user_id: str) -> str:
+def create_refresh_token(user_id: str, session_id: str, jti: str) -> str:
     payload = {
         "sub": user_id,
+        "sid": session_id,
+        "jti": jti,
         "type": "refresh",
         "exp": datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_DAYS),
         "iat": datetime.now(timezone.utc),
     }
     return jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
+
+async def create_auth_session(user_id: str) -> tuple[str, str]:
+    """Create a server-side session so logout/reset can revoke JWTs immediately."""
+    session_id = secrets.token_urlsafe(24)
+    refresh_jti = secrets.token_urlsafe(24)
+    now = datetime.now(timezone.utc)
+    await db.auth_sessions.insert_one({
+        "session_id": session_id,
+        "user_id": user_id,
+        "refresh_jti": refresh_jti,
+        "created_at": now,
+        "expires_at": now + timedelta(days=REFRESH_TOKEN_DAYS),
+        "revoked_at": None,
+    })
+    return session_id, refresh_jti
+
+
+async def revoke_session(session_id: str) -> None:
+    await db.auth_sessions.update_one(
+        {"session_id": session_id, "revoked_at": None},
+        {"$set": {"revoked_at": datetime.now(timezone.utc)}},
+    )
+
+
+async def revoke_user_sessions(user_id: str) -> None:
+    await db.auth_sessions.update_many(
+        {"user_id": user_id, "revoked_at": None},
+        {"$set": {"revoked_at": datetime.now(timezone.utc)}},
+    )
+
+
+async def active_session(session_id: str, user_id: str) -> bool:
+    session = await db.auth_sessions.find_one({
+        "session_id": session_id,
+        "user_id": user_id,
+        "revoked_at": None,
+        "expires_at": {"$gt": datetime.now(timezone.utc)},
+    })
+    return session is not None
 
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
@@ -326,13 +369,15 @@ async def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
-        if payload.get("type") != "access":
+        if payload.get("type") != "access" or not payload.get("sid"):
             raise HTTPException(status_code=status.HTTP_401_UNSUPPORTED_MEDIA_TYPE, detail="Invalid token type")
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=status.HTTP_401_TOKEN_EXPIRED, detail="Token expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=status.HTTP_401_INVALID_TOKEN, detail="Invalid token")
 
+    if not await active_session(payload["sid"], payload["sub"]):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session revoked or expired")
     user = await db.users.find_one({"id": payload["sub"]})
     if not user:
         raise HTTPException(status_code=status.HTTP_401_NOT_FOUND, detail="User not found")
@@ -393,6 +438,47 @@ async def clear_failed_attempts(ip: str, email: str) -> None:
     await db.login_attempts.delete_one({"key": f"{ip}:{email}"})
 
 
+
+async def check_password_reset_rate_limit(ip: str, email: str) -> None:
+    key = f"reset:{ip}:{email}"
+    attempt = await db.login_attempts.find_one({"key": key})
+    now = datetime.now(timezone.utc)
+    if attempt and attempt.get("locked_until") and now < attempt["locked_until"]:
+        raise HTTPException(status_code=429, detail="Too many password reset requests")
+
+
+async def record_password_reset_attempt(ip: str, email: str) -> None:
+    key = f"reset:{ip}:{email}"
+    now = datetime.now(timezone.utc)
+    attempt = await db.login_attempts.find_one({"key": key})
+    count = (attempt.get("count", 0) if attempt else 0) + 1
+    update = {"$set": {"count": count, "last_attempt": now}}
+    if count >= LOCKOUT_THRESHOLD:
+        update["$set"]["locked_until"] = now + timedelta(minutes=LOCKOUT_MINUTES)
+    await db.login_attempts.update_one({"key": key}, update, upsert=True)
+
+async def check_mfa_lockout(ip: str, user_id: str) -> None:
+    key = f"mfa:{ip}:{user_id}"
+    attempt = await db.login_attempts.find_one({"key": key})
+    if attempt and attempt.get("locked_until") and datetime.now(timezone.utc) < attempt["locked_until"]:
+        raise HTTPException(status_code=429, detail="MFA temporarily locked. Try again later")
+
+
+async def record_mfa_failure(ip: str, user_id: str) -> None:
+    key = f"mfa:{ip}:{user_id}"
+    now = datetime.now(timezone.utc)
+    attempt = await db.login_attempts.find_one({"key": key})
+    count = (attempt.get("count", 0) if attempt else 0) + 1
+    update = {"$set": {"count": count, "last_attempt": now}}
+    if count >= LOCKOUT_THRESHOLD:
+        update["$set"]["locked_until"] = now + timedelta(minutes=LOCKOUT_MINUTES)
+    await db.login_attempts.update_one({"key": key}, update, upsert=True)
+
+
+async def clear_mfa_failures(ip: str, user_id: str) -> None:
+    await db.login_attempts.delete_one({"key": f"mfa:{ip}:{user_id}"})
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Pydantic models
 # ─────────────────────────────────────────────────────────────────────────────
@@ -444,6 +530,8 @@ async def on_startup():
     await db.users.create_index("id", unique=True)
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.login_attempts.create_index("key", unique=True)
+    await db.auth_sessions.create_index("session_id", unique=True)
+    await db.auth_sessions.create_index("expires_at", expireAfterSeconds=0)
     for col in ("threats", "incidents", "vulnerabilities", "assets", "compliance", "audit_logs"):
         await db[col].create_index([("tenant", 1), ("timestamp", -1)])
     await seed_users()
@@ -629,8 +717,9 @@ async def login(body: LoginRequest, request: Request, response: Response):
             "role": user["role"],
             "tenant": user["tenant"],
         }
-    access = create_access_token(user["id"], user["email"], user["role"], user["tenant"])
-    refresh = create_refresh_token(user["id"])
+    session_id, refresh_jti = await create_auth_session(user["id"])
+    access = create_access_token(user["id"], user["email"], user["role"], user["tenant"], session_id)
+    refresh = create_refresh_token(user["id"], session_id, refresh_jti)
     set_auth_cookies(response, access, refresh)
     await write_audit(user["email"], "login", "auth", request, user["tenant"])
     return {"message": "Logged in", "email": user["email"], "role": user["role"], "tenant": user["tenant"]}
@@ -660,11 +749,16 @@ async def mfa_verify(body: dict, request: Request, response: Response):
     user = await db.users.find_one({"id": payload["sub"]})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid MFA session")
+    ip = forwarded_client_ip(request, settings.TRUSTED_PROXY_IPS)
+    await check_mfa_lockout(ip, user["id"])
     if not _verify_totp(_mfa_secret(user["id"]), code):
+        await record_mfa_failure(ip, user["id"])
         raise HTTPException(status_code=401, detail="Invalid MFA code")
+    await clear_mfa_failures(ip, user["id"])
     await db.users.update_one({"id": user["id"]}, {"$set": {"mfaEnrolledAt": user.get("mfaEnrolledAt") or datetime.now(timezone.utc).isoformat()}})
-    access = create_access_token(user["id"], user["email"], user["role"], user["tenant"])
-    refresh = create_refresh_token(user["id"])
+    session_id, refresh_jti = await create_auth_session(user["id"])
+    access = create_access_token(user["id"], user["email"], user["role"], user["tenant"], session_id)
+    refresh = create_refresh_token(user["id"], session_id, refresh_jti)
     set_auth_cookies(response, access, refresh)
     _clear_mfa_pending_cookie(response)
     await write_audit(user["email"], "login", "auth", request, user["tenant"])
@@ -672,6 +766,14 @@ async def mfa_verify(body: dict, request: Request, response: Response):
 
 @api_router.post("/auth/logout")
 async def logout(request: Request, response: Response, user: dict = Depends(get_current_user)):
+    token = request.cookies.get("access_token")
+    if token:
+        try:
+            payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
+            if payload.get("sid"):
+                await revoke_session(payload["sid"])
+        except jwt.InvalidTokenError:
+            pass
     clear_auth_cookies(response)
     await write_audit(user["email"], "logout", "auth", request, user["tenant"])
     return {"message": "Logged out"}
@@ -689,25 +791,40 @@ async def refresh(request: Request, response: Response):
         raise HTTPException(status_code=401, detail="No refresh token")
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
-        if payload.get("type") != "refresh":
+        if payload.get("type") != "refresh" or not payload.get("sid") or not payload.get("jti"):
             raise HTTPException(status_code=401, detail="Invalid token type")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    now = datetime.now(timezone.utc)
+    session = await db.auth_sessions.find_one_and_update(
+        {
+            "session_id": payload["sid"],
+            "user_id": payload["sub"],
+            "refresh_jti": payload["jti"],
+            "revoked_at": None,
+            "expires_at": {"$gt": now},
+        },
+        {"$set": {"revoked_at": now}},
+    )
+    if not session:
+        raise HTTPException(status_code=401, detail="Refresh token revoked or already used")
     user = await db.users.find_one({"id": payload["sub"]})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
-    access = create_access_token(user["id"], user["email"], user["role"], user["tenant"])
-    secure = settings.AEGIS_ENV.lower() == "production"
-    samesite = "strict" if secure else "lax"
-    response.set_cookie(
-        key="access_token", value=access, httponly=True, secure=secure,
-        samesite=samesite, max_age=ACCESS_TOKEN_MINUTES * 60, path="/",
-    )
+
+    session_id, refresh_jti = await create_auth_session(user["id"])
+    access = create_access_token(user["id"], user["email"], user["role"], user["tenant"], session_id)
+    refresh_token = create_refresh_token(user["id"], session_id, refresh_jti)
+    set_auth_cookies(response, access, refresh_token)
     return {"message": "Token refreshed"}
 
 
 @api_router.post("/auth/password-reset/request")
 async def password_reset_request(body: PasswordResetRequest, request: Request):
+    ip = forwarded_client_ip(request, settings.TRUSTED_PROXY_IPS)
+    await check_password_reset_rate_limit(ip, body.email)
+    await record_password_reset_attempt(ip, body.email)
     user = await db.users.find_one({"email": body.email})
     # Always return success — prevents enumeration
     if user:
@@ -745,10 +862,14 @@ async def password_reset_confirm(body: PasswordResetConfirm, request: Request):
     if consumed.modified_count != 1:
         raise HTTPException(status_code=400, detail="Invalid or expired reset token")
 
+    user = await db.users.find_one({"email": record["email"]})
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
     await db.users.update_one(
         {"email": record["email"]},
         {"$set": {"password_hash": hash_password(body.new_password)}},
     )
+    await revoke_user_sessions(user["id"])
     await write_audit(record["email"], "password_reset_confirm", "auth", request)
     return {"message": "Password updated. Please log in."}
 
