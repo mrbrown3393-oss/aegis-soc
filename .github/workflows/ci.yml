@@ -32,14 +32,14 @@ jobs:
           curl -sf -c /tmp/c.txt -X POST http://127.0.0.1:8001/api/auth/login -H 'Content-Type: application/json' -d '{"email":"admin@test.io","password":"TestPass123!"}' | tee /tmp/login.json | grep -q '"mfaRequired":true'
           python - <<'PY'
           import base64, hashlib, hmac, struct, time
-          import requests
-          s = requests.Session()
-          login = requests.post(
+          import httpx
+          s = httpx.Client()
+          login = s.post(
               "http://127.0.0.1:8001/api/auth/login",
               json={"email":"admin@test.io","password":"TestPass123!"},
           )
           assert login.status_code == 200 and login.json()["mfaRequired"] is True
-          setup = s.get("http://127.0.0.1:8001/api/auth/mfa/setup", cookies=login.cookies)
+          setup = s.get("http://127.0.0.1:8001/api/auth/mfa/setup")
           assert setup.status_code == 200
           secret = setup.json()["secret"]
           key = base64.b32decode(secret + "=" * ((8 - len(secret) % 8) % 8), casefold=True)
@@ -47,10 +47,9 @@ jobs:
           digest = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
           offset = digest[-1] & 0x0F
           code = f"{(struct.unpack('>I', digest[offset:offset+4])[0] & 0x7fffffff) % 1000000:06d}"
-          verify = s.post("http://127.0.0.1:8001/api/auth/mfa/verify", json={"code":code}, cookies=login.cookies)
+          verify = s.post("http://127.0.0.1:8001/api/auth/mfa/verify", json={"code":code})
           assert verify.status_code == 200, verify.text
-          cookies = s.cookies
-          metrics = s.get("http://127.0.0.1:8001/api/metrics/overview?tenant=all", cookies=cookies)
+          metrics = s.get("http://127.0.0.1:8001/api/metrics/overview?tenant=all")
           assert metrics.status_code == 200 and "total_threats" in metrics.json()
           print("Authenticated MFA smoke test passed")
           PY
