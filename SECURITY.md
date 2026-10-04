@@ -93,11 +93,12 @@ Aegis SOC is a modular, multi-tenant Security Operations Center platform unifyin
 | Document | Path |
 | --- | --- |
 | Security Dossier | `SECURITY_DOSSIER.md` |
+| Evidence Catalog (code map) | `docs/EVIDENCE_CATALOG.md` |
 | NIST Alignment | `NIST_ALIGNMENT.md` |
 | Policy Pack | `docs/SECURITY_POLICY_PACK.md` |
 | Incident Response Plan | `docs/INCIDENT_RESPONSE_PLAN.md` |
 | Rules of Behavior | `docs/RULES_OF_BEHAVIOR.md` |
-| Hardening Notes | `SECURITY_HARDENING.md` |
+| Hardening Guide | `SECURITY_HARDENING.md` |
 
 ### FedRAMP Moderate design target
 
@@ -131,6 +132,7 @@ Aegis SOC is a modular, multi-tenant Security Operations Center platform unifyin
 
 | Document | Path |
 | --- | --- |
+| Evidence Catalog | `docs/EVIDENCE_CATALOG.md` |
 | MongoDB Hardening | `ops/mongodb/` |
 | Ingress Headers | `ops/ingress/security-headers.yaml` |
 | Security CI | `.github/workflows/security.yml` |
@@ -138,6 +140,8 @@ Aegis SOC is a modular, multi-tenant Security Operations Center platform unifyin
 | Security Tests | `tests/test_backend_security.py` |
 | SSO Module | `backend/sso.py` |
 | Hardening Middleware | `backend/security_hardening.py` |
+| Config / auth helpers / deps | `backend/config.py`, `auth_helpers.py`, `deps.py` |
+| Auth & domain routers | `backend/routers/` |
 
 ---
 
