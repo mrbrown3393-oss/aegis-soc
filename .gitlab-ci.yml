@@ -1,35 +1,23 @@
 # Aegis SOC — GitLab CI
 stages:
-  - install
-  - build
+  - backend
+  - frontend
 
-variables:
-  NODE_ENV: production
+backend_tests:
+  stage: backend
+  image: python:3.11-slim
+  script:
+    - cd backend
+    - pip install -r requirements.txt
+    - pytest -q ../tests
 
-cache:
-  key: ${CI_COMMIT_REF_SLUG}
-  paths:
-    - node_modules/
-    - client/node_modules/
-
-install:
-  stage: install
+frontend_build:
+  stage: frontend
   image: node:20-bookworm
   script:
+    - cd client
     - npm ci --omit=optional || npm install
-    - cd client && (npm ci --omit=optional || npm install)
-  artifacts:
-    paths:
-      - node_modules/
-      - client/node_modules/
-    expire_in: 1 hour
-
-build_client:
-  stage: build
-  image: node:20-bookworm
-  needs: ["install"]
-  script:
-    - cd client && npx vite build
+    - npx vite build
   artifacts:
     paths:
       - client/dist/
