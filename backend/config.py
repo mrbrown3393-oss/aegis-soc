@@ -31,6 +31,14 @@ class Settings(BaseSettings):
     OIDC_CLIENT_ID: str = ""
     OIDC_CLIENT_SECRET: str = ""
     OIDC_SCOPES: str = "openid profile email"
+    OIDC_REDIRECT_URI: str = ""
+    OIDC_SUCCESS_REDIRECT_URL: str = "http://localhost:3000"
+    OIDC_TENANT_CLAIM: str = "tenant"
+    OIDC_ALLOWED_TENANTS: str = "private"
+    OIDC_ROLE_CLAIM: str = "role"
+    OIDC_REQUIRE_MFA_CLAIM: bool = True
+    OIDC_MFA_AMR_VALUES: str = "mfa"
+    OIDC_ALLOW_EMAIL_LINKING: bool = False
     MFA_REQUIRED: bool = True
     MFA_MASTER_SECRET: str = ""
     AEGIS_ENV: str = "development"
@@ -78,6 +86,25 @@ def validate_security_settings() -> None:
         raise RuntimeError("Production requires an explicit frontend/CORS origin.")
     if not settings.FRONTEND_URL.lower().startswith("https://"):
         raise RuntimeError("Production FRONTEND_URL must use HTTPS.")
+    if settings.OIDC_ENABLED:
+        oidc_required = {
+            "OIDC_ISSUER_URL": settings.OIDC_ISSUER_URL,
+            "OIDC_CLIENT_ID": settings.OIDC_CLIENT_ID,
+            "OIDC_CLIENT_SECRET": settings.OIDC_CLIENT_SECRET,
+            "OIDC_REDIRECT_URI": settings.OIDC_REDIRECT_URI,
+        }
+        if any(not value.strip() for value in oidc_required.values()):
+            raise RuntimeError("Production OIDC requires issuer, client, secret, and redirect URI.")
+        if not settings.OIDC_REDIRECT_URI.lower().startswith("https://"):
+            raise RuntimeError("Production OIDC_REDIRECT_URI must use HTTPS.")
+        if not settings.OIDC_SUCCESS_REDIRECT_URL.lower().startswith("https://"):
+            raise RuntimeError("Production OIDC_SUCCESS_REDIRECT_URL must use HTTPS.")
+        if not settings.OIDC_ALLOWED_TENANTS.strip():
+            raise RuntimeError("Production OIDC requires an explicit tenant allowlist.")
+        if settings.OIDC_ALLOW_EMAIL_LINKING:
+            raise RuntimeError("Production OIDC email linking must be explicitly reviewed before enablement.")
+        if settings.OIDC_REQUIRE_MFA_CLAIM and not settings.OIDC_MFA_AMR_VALUES.strip():
+            raise RuntimeError("Production OIDC MFA enforcement requires at least one allowed AMR value.")
 
 
 def allowed_csrf_origins() -> set[str]:
