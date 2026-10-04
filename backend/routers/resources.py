@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from database import db
 from deps import get_current_user, tenant_filter
@@ -26,7 +26,7 @@ async def list_compliance(tenant: Optional[str] = None, user: dict = Depends(get
 @router.get("/audit-logs")
 async def list_audit_logs(
     tenant: Optional[str] = None,
-    limit: int = 100,
+    limit: int = Query(100, ge=1, le=200),
     user: dict = Depends(get_current_user),
 ):
     filt = tenant_filter(user, tenant)
