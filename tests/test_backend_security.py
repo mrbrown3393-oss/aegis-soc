@@ -487,3 +487,11 @@ def test_tenant_boundary_filters_apply_to_mutating_endpoints(monkeypatch):
     import pytest
     with pytest.raises(Exception, match="Cannot invite users into another tenant"):
         users.validate_invite_authorization(user, body)
+
+
+
+def test_native_pymongo_async_driver_is_used():
+    from database import client
+    from pymongo import AsyncMongoClient
+
+    assert isinstance(client, AsyncMongoClient)
