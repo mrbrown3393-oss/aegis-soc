@@ -10,6 +10,7 @@ import { authenticate } from '../middleware/auth.js';
 
 const router = Router();
 const loginAttempts = new Map();
+const mfaAttempts = new Map();
 const MFA_STEP = 30;
 
 const loginSchema = z.object({ body: z.object({ email: z.string().email(), password: z.string().min(8) }) });
@@ -93,6 +94,10 @@ function recordFailure(req, email) {
   loginAttempts.set(key, item);
 }
 function clearFailures(req, email) { loginAttempts.delete(clientKey(req, email)); }
+function mfaKey(req, userId) { return req.ip + ':' + userId; }
+function checkMfaLockout(req, userId) { const item = mfaAttempts.get(mfaKey(req, userId)); return Boolean(item && item.until > Date.now()); }
+function recordMfaFailure(req, userId) { const key = mfaKey(req, userId); const item = mfaAttempts.get(key) || { count: 0, until: 0 }; item.count += 1; if (item.count >= 5) item.until = Date.now() + 15 * 60 * 1000; mfaAttempts.set(key, item); }
+function clearMfaFailures(req, userId) { mfaAttempts.delete(mfaKey(req, userId)); }
 
 router.post('/login', validate(loginSchema), async (req, res) => {
   const { email, password } = req.body;
@@ -106,7 +111,7 @@ router.post('/login', validate(loginSchema), async (req, res) => {
   clearFailures(req, email);
   if (config.MFA_REQUIRED) {
     setPending(res, user);
-    return res.json({ mfaRequired: true, user: { id: user.id, email: user.email, name: user.name, role: user.role, department: user.department, tenant: user.tenant } });
+    return res.json({ mfaRequired: true, mfaEnrolled: Boolean(user.mfaEnrolledAt), user: { id: user.id, email: user.email, name: user.name, role: user.role, department: user.department, tenant: user.tenant } });
   }
   const token = signSession(user); setSession(res, token);
   user.lastLogin = new Date().toISOString();
@@ -121,6 +126,7 @@ router.get('/mfa/setup', (req, res) => {
     const payload = jwt.verify(pending, config.JWT_SECRET, { algorithms: ['HS256'], issuer: 'aegis-soc', audience: 'aegis-soc-api' });
     const user = store.users.find(u => u.id === payload.sub);
     if (!user) throw new Error('invalid');
+    if (user.mfaEnrolledAt) return res.status(409).json({ error: 'MFA is already enrolled' });
     const secret = mfaSecretFor(user);
     const issuer = encodeURIComponent('Aegis SOC');
     const label = encodeURIComponent(user.email);
@@ -134,7 +140,11 @@ router.post('/mfa/verify', validate(mfaSchema), (req, res) => {
   try {
     const payload = jwt.verify(pending, config.JWT_SECRET, { algorithms: ['HS256'], issuer: 'aegis-soc', audience: 'aegis-soc-api' });
     const user = store.users.find(u => u.id === payload.sub);
-    if (!user || !verifyTotp(mfaSecretFor(user), req.body.code)) return res.status(401).json({ error: 'Invalid MFA code' });
+    if (!user) return res.status(401).json({ error: 'Invalid MFA session' });
+    if (checkMfaLockout(req, user.id)) return res.status(429).json({ error: 'Too many MFA attempts. Try again later.' });
+    if (!verifyTotp(mfaSecretFor(user), req.body.code)) { recordMfaFailure(req, user.id); return res.status(401).json({ error: 'Invalid MFA code' }); }
+    clearMfaFailures(req, user.id);
+    user.mfaEnrolledAt = user.mfaEnrolledAt || new Date().toISOString();
     clearPending(res);
     setSession(res, signSession(user));
     user.lastLogin = new Date().toISOString();

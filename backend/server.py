@@ -83,6 +83,14 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
+# Create the application before registering middleware/decorators.
+app = FastAPI(
+    title="Aegis SOC API",
+    version="2.1.0",
+    docs_url="/docs" if settings.AEGIS_ENV.lower() != "production" else None,
+    redoc_url="/redoc" if settings.AEGIS_ENV.lower() != "production" else None,
+)
+
 
 def validate_security_settings() -> None:
     """Fail closed on unsafe production defaults before the API starts."""
@@ -144,8 +152,6 @@ LOCKOUT_MINUTES = 15
 # ─────────────────────────────────────────────────────────────────────────────
 # App + DB
 # ─────────────────────────────────────────────────────────────────────────────
-
-app = FastAPI(title="Aegis SOC API", version="2.1.0", docs_url="/docs", redoc_url="/redoc")
 
 app.add_middleware(SecurityHeadersMiddleware)
 
@@ -212,21 +218,25 @@ def create_refresh_token(user_id: str) -> str:
 
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+    secure = settings.AEGIS_ENV.lower() == "production"
+    samesite = "strict" if secure else "lax"
     response.set_cookie(
         key="access_token", value=access_token,
-        httponly=True, secure=True, samesite="none",
+        httponly=True, secure=secure, samesite=samesite,
         max_age=ACCESS_TOKEN_MINUTES * 60, path="/",
     )
     response.set_cookie(
         key="refresh_token", value=refresh_token,
-        httponly=True, secure=True, samesite="none",
+        httponly=True, secure=secure, samesite=samesite,
         max_age=REFRESH_TOKEN_DAYS * 24 * 3600, path="/",
     )
 
 
 def clear_auth_cookies(response: Response) -> None:
-    response.delete_cookie(key="access_token", path="/", samesite="none", secure=True)
-    response.delete_cookie(key="refresh_token", path="/", samesite="none", secure=True)
+    secure = settings.AEGIS_ENV.lower() == "production"
+    samesite = "strict" if secure else "lax"
+    response.delete_cookie(key="access_token", path="/", samesite=samesite, secure=secure)
+    response.delete_cookie(key="refresh_token", path="/", samesite=samesite, secure=secure)
 
 
 async def get_current_user(request: Request) -> dict:
@@ -501,6 +511,8 @@ async def health():
 
 @api_router.post("/auth/register")
 async def register(body: RegisterRequest, request: Request, response: Response):
+    if settings.AEGIS_ENV.lower() == "production":
+        raise HTTPException(status_code=403, detail="Self-registration is disabled in production")
     if await db.users.find_one({"email": body.email}):
         raise HTTPException(status_code=400, detail="Email already registered")
     user_id = secrets.token_hex(16)
@@ -513,11 +525,8 @@ async def register(body: RegisterRequest, request: Request, response: Response):
         "password_hash": hash_password(body.password),
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
-    access = create_access_token(user_id, body.email, "viewer", "private")
-    refresh = create_refresh_token(user_id)
-    set_auth_cookies(response, access, refresh)
     await write_audit(body.email, "register", "users", request, "private")
-    return {"message": "Registered", "email": body.email, "role": "viewer"}
+    return {"message": "Registered. Please sign in.", "email": body.email, "role": "viewer"}
 
 
 @api_router.post("/auth/login")
@@ -564,9 +573,11 @@ async def refresh(request: Request, response: Response):
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     access = create_access_token(user["id"], user["email"], user["role"], user["tenant"])
+    secure = settings.AEGIS_ENV.lower() == "production"
+    samesite = "strict" if secure else "lax"
     response.set_cookie(
-        key="access_token", value=access, httponly=True, secure=True,
-        samesite="none", max_age=ACCESS_TOKEN_MINUTES * 60, path="/",
+        key="access_token", value=access, httponly=True, secure=secure,
+        samesite=samesite, max_age=ACCESS_TOKEN_MINUTES * 60, path="/",
     )
     return {"message": "Token refreshed"}
 
@@ -583,8 +594,8 @@ async def password_reset_request(body: PasswordResetRequest, request: Request):
             "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
             "used": False,
         })
-        # In production: send token via email. Demo: log only.
-        print(f"[DEMO] Password reset token for {body.email}: {token}")
+        # Deliver the token through a dedicated email provider in deployment.
+        # Never log reset tokens or include them in API responses.
     await write_audit(body.email, "password_reset_request", "auth", request)
     return {"message": "If the account exists, a reset link has been sent."}
 
@@ -664,7 +675,7 @@ async def threats_live(user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     threat = {
         "id": secrets.token_hex(8),
-        "tenant": user["tenant"] if user["role"] not in ("owner", "admin") else secrets.choice(["government", "private", "saas"]),
+        "tenant": user["tenant"],
         "severity": secrets.choice(["critical", "high", "medium", "low"]),
         "title": f"Live simulated event {secrets.token_hex(4)}",
         "description": "Simulated live telemetry — not a real attack.",
@@ -759,6 +770,8 @@ async def list_users(user: dict = Depends(require_role("owner", "admin"))):
 
 @api_router.post("/users")
 async def invite_user(body: UserInvite, request: Request, user: dict = Depends(require_role("owner", "admin"))):
+    if user["role"] != "owner" and body.tenant != user["tenant"]:
+        raise HTTPException(status_code=403, detail="Cannot invite users into another tenant")
     if await db.users.find_one({"email": body.email}):
         raise HTTPException(status_code=400, detail="Email already registered")
     user_id = secrets.token_hex(16)
@@ -778,7 +791,10 @@ async def invite_user(body: UserInvite, request: Request, user: dict = Depends(r
 
 @api_router.delete("/users/{user_id}")
 async def delete_user(user_id: str, request: Request, user: dict = Depends(require_role("owner", "admin"))):
-    target = await db.users.find_one({"id": user_id})
+    target_filter = {"id": user_id}
+    if user["role"] != "owner":
+        target_filter["tenant"] = user["tenant"]
+    target = await db.users.find_one(target_filter)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     if target["role"] == "owner":
