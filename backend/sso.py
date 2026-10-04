@@ -1,10 +1,7 @@
 from __future__ import annotations
-import base64, secrets
-from datetime import datetime, timezone
-from urllib.parse import urlencode
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, HTTPException
 from pydantic_settings import BaseSettings
+
 
 class SSOSettings(BaseSettings):
     SSO_BASE_URL:str="http://localhost:8001"; SAML_ENABLED:bool=False; OIDC_ENABLED:bool=False
@@ -23,26 +20,24 @@ async def sso_config():
 
 @sso_router.get("/oidc/login")
 async def oidc_login():
-    if not settings.OIDC_ENABLED or not settings.OIDC_ISSUER_URL or not settings.OIDC_CLIENT_ID: raise HTTPException(503,"OIDC is not configured")
-    state=secrets.token_urlsafe(32); nonce=secrets.token_urlsafe(32)
-    callback=f"{settings.SSO_BASE_URL.rstrip('/')}/api/auth/sso/oidc/callback"
-    params={"client_id":settings.OIDC_CLIENT_ID,"response_type":"code","scope":settings.OIDC_SCOPES,"redirect_uri":callback,"state":state,"nonce":nonce}
-    return RedirectResponse(f"{settings.OIDC_ISSUER_URL.rstrip('/')}/authorize?{urlencode(params)}")
+    # Fail closed until a complete provider integration is configured with
+    # server-side state/nonce handling, PKCE, token exchange, issuer/audience
+    # validation, JWKS signature validation, and tenant mapping.
+    raise HTTPException(503, "OIDC integration is disabled until secure provider validation is configured")
+
 
 @sso_router.get("/oidc/callback")
-async def oidc_callback(request:Request,code:str,state:str):
-    if not settings.OIDC_ENABLED: raise HTTPException(503,"OIDC is not configured")
-    raise HTTPException(501,"OIDC callback requires provider token-exchange and server-side state configuration")
+async def oidc_callback():
+    raise HTTPException(503, "OIDC integration is disabled until secure provider validation is configured")
+
 
 @sso_router.get("/saml/login")
 async def saml_login():
-    if not settings.SAML_ENABLED or not settings.SAML_IDP_SSO_URL or not settings.SAML_IDP_ENTITY_ID: raise HTTPException(503,"SAML is not configured")
-    request_id="_"+secrets.token_hex(16); issue=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    acs=f"{settings.SSO_BASE_URL.rstrip('/')}/api/auth/sso/saml/acs"
-    xml=f'<?xml version="1.0" encoding="UTF-8"?><samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{request_id}" Version="2.0" IssueInstant="{issue}" AssertionConsumerServiceURL="{acs}"><saml:Issuer>{settings.SAML_IDP_ENTITY_ID}</saml:Issuer></samlp:AuthnRequest>'
-    return RedirectResponse(f"{settings.SAML_IDP_SSO_URL}?{urlencode({'SAMLRequest':base64.b64encode(xml.encode()).decode()})}")
+    # Never emit an unsigned SAML AuthnRequest. A production SAML integration
+    # must use a vetted SAML library and validate the IdP metadata/certificate.
+    raise HTTPException(503, "SAML integration is disabled until signed requests and IdP validation are configured")
+
 
 @sso_router.post("/saml/acs")
-async def saml_acs(request:Request):
-    if not settings.SAML_ENABLED: raise HTTPException(503,"SAML is not configured")
-    raise HTTPException(501,"SAML ACS requires assertion signature and audience validation configuration")
+async def saml_acs():
+    raise HTTPException(503, "SAML integration is disabled until assertion signature, audience, issuer, recipient, and replay validation are configured")
