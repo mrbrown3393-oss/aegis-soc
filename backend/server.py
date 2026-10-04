@@ -394,8 +394,8 @@ def require_role(*roles: str):
 
 
 def tenant_filter(user: dict, requested: Optional[str] = None) -> dict:
-    """Non-privileged users are hard-scoped to their own tenant; owner/admin may filter freely."""
-    if user["role"] in ("owner", "admin"):
+    """Only the owner may cross tenant boundaries; all other roles stay on their own tenant."""
+    if user["role"] == "owner":
         if requested and requested != "all":
             return {"tenant": requested}
         return {}  # all tenants
