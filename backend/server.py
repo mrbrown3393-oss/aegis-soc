@@ -87,6 +87,11 @@ async def on_startup():
     await run_startup()
 
 
+@app.on_event("shutdown")
+async def on_shutdown():
+    await client.close()
+
+
 # ── Routers ─────────────────────────────────────────────────────────────────
 from routers.auth import router as auth_router
 from routers.metrics import router as metrics_router
