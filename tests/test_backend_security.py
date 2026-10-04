@@ -87,3 +87,26 @@ def test_production_rejects_wildcard_cors(monkeypatch):
     import pytest
     with pytest.raises(RuntimeError, match="wildcard origins"):
         validate_security_settings()
+
+
+def test_csrf_guard_blocks_cross_origin_authenticated_mutation():
+    from fastapi.testclient import TestClient
+    from server import app
+
+    client = TestClient(app)
+    client.cookies.set("access_token", "test-cookie")
+    response = client.post("/api/auth/refresh", headers={"Origin": "https://evil.example"})
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Cross-origin request blocked"
+
+
+def test_csrf_guard_allows_configured_origin():
+    from fastapi.testclient import TestClient
+    from server import app
+
+    client = TestClient(app)
+    client.cookies.set("access_token", "test-cookie")
+    response = client.post("/api/auth/refresh", headers={"Origin": "http://localhost:3000"})
+    # The CSRF guard must allow the configured origin; downstream auth may reject
+    # the intentionally fake token, but it must not reject it as cross-origin.
+    assert response.status_code != 403
