@@ -1038,6 +1038,8 @@ async def list_users(user: dict = Depends(require_role("owner", "admin"))):
 async def invite_user(body: UserInvite, request: Request, user: dict = Depends(require_role("owner", "admin"))):
     if user["role"] != "owner" and body.tenant != user["tenant"]:
         raise HTTPException(status_code=403, detail="Cannot invite users into another tenant")
+    if user["role"] != "owner" and body.role == "owner":
+        raise HTTPException(status_code=403, detail="Only the owner can grant the owner role")
     if await db.users.find_one({"email": body.email}):
         raise HTTPException(status_code=400, detail="Email already registered")
     user_id = secrets.token_hex(16)
