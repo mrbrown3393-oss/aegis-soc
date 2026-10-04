@@ -25,7 +25,7 @@ async def update_incident(
     incident_id: str,
     body: IncidentUpdate,
     request: Request,
-    user: dict = Depends(require_role("owner", "admin", "analyst")),
+    user: dict = Depends(require_step_up),
 ):
     filt = {"id": incident_id, **tenant_filter(user)}
     result = await db.incidents.update_one(
