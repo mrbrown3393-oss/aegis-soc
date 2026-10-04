@@ -16,6 +16,7 @@ os.environ.update({
 
 def test_refresh_rotation_rejects_stale_jti_atomically(monkeypatch):
     from routers import auth
+    import session_security
 
     class Result:
         modified_count = 0
@@ -29,6 +30,7 @@ def test_refresh_rotation_rejects_stale_jti_atomically(monkeypatch):
                 "session_id": "session-1",
                 "user_id": "user-1",
                 "refresh_jti": "old-jti",
+                "device_fingerprint": "trusted-device",
                 "revoked_at": None,
                 "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5),
             }
@@ -53,6 +55,12 @@ def test_refresh_rotation_rejects_stale_jti_atomically(monkeypatch):
 
     fake = FakeDB()
     monkeypatch.setattr(auth, "db", fake)
+    monkeypatch.setattr(session_security, "db", fake)
+    monkeypatch.setattr(session_security, "device_fingerprint", lambda request: "untrusted-device")
+    monkeypatch.setattr(session_security, "db", fake)
+    monkeypatch.setattr(session_security, "device_fingerprint", lambda request: "trusted-device")
+    monkeypatch.setattr(session_security, "db", fake)
+    monkeypatch.setattr(session_security, "device_fingerprint", lambda request: "trusted-device")
     monkeypatch.setattr(
         auth,
         "decode_jwt",
@@ -91,6 +99,7 @@ def test_refresh_rotation_rejects_stale_jti_atomically(monkeypatch):
 
 def test_refresh_rotation_updates_only_current_jti(monkeypatch):
     from routers import auth
+    import session_security
 
     class Result:
         modified_count = 1
@@ -104,6 +113,7 @@ def test_refresh_rotation_updates_only_current_jti(monkeypatch):
                 "session_id": "session-1",
                 "user_id": "user-1",
                 "refresh_jti": "old-jti",
+                "device_fingerprint": "trusted-device",
                 "revoked_at": None,
                 "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5),
             }
@@ -163,6 +173,7 @@ def test_refresh_rotation_updates_only_current_jti(monkeypatch):
 
 def test_refresh_rejects_device_context_change_and_revokes_session(monkeypatch):
     from routers import auth
+    import session_security
 
     class Result:
         modified_count = 1
@@ -199,7 +210,6 @@ def test_refresh_rejects_device_context_change_and_revokes_session(monkeypatch):
     monkeypatch.setattr(auth, "decode_jwt", lambda token: {
         "type": "refresh", "sid": "session-1", "sub": "user-1", "jti": "old-jti",
     })
-    monkeypatch.setattr(auth, "device_fingerprint", lambda request: "untrusted-device")
 
     class Request:
         cookies = {"refresh_token": "refresh-token"}
