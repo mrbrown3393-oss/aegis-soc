@@ -84,7 +84,12 @@ class Settings(BaseSettings):
 settings = Settings()
 
 # Create the application before registering middleware/decorators.
-app = FastAPI(title="Aegis SOC API", version="2.1.0", docs_url="/docs", redoc_url="/redoc")
+app = FastAPI(
+    title="Aegis SOC API",
+    version="2.1.0",
+    docs_url="/docs" if settings.AEGIS_ENV.lower() != "production" else None,
+    redoc_url="/redoc" if settings.AEGIS_ENV.lower() != "production" else None,
+)
 
 
 def validate_security_settings() -> None:
