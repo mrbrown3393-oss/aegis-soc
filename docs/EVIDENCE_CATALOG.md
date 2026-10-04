@@ -15,9 +15,11 @@ Authoritative map from **IMPLEMENTED** controls to source evidence after the bac
 | Password hashing (bcrypt cost 12) | `backend/auth_helpers.py` → `hash_password()`, `verify_password()` |
 | JWT access + refresh issuance | `backend/auth_helpers.py` → `create_access_token()`, `create_refresh_token()` |
 | Server-side sessions / revocation | `backend/auth_helpers.py` → `create_auth_session`, `revoke_*`, `active_session` |
+| Idle session timeout | `backend/auth_helpers.py` → `active_session()`; 15-minute rolling inactivity limit |
 | Session revalidation on each request | `backend/deps.py` → `get_current_user()` |
 | MFA (TOTP ±1 window) | `backend/auth_helpers.py` → `totp`, `verify_totp`; `backend/routers/auth.py` MFA routes |
 | Brute-force / MFA / reset lockouts | `backend/auth_helpers.py` lockout helpers; `backend/routers/auth.py` |
+| Authenticated endpoint rate limiting | `backend/auth_helpers.py` → `enforce_authenticated_rate_limit()`; Mongo-backed 120 requests/minute window |
 | Auth routes (register, login, logout, refresh, password reset) | `backend/routers/auth.py` |
 | RBAC | `backend/deps.py` → `require_role()` |
 | Tenant scoping | `backend/deps.py` → `tenant_filter()` |
