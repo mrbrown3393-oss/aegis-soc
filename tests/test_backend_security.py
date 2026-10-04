@@ -100,6 +100,17 @@ def test_csrf_guard_blocks_cross_origin_authenticated_mutation():
     assert response.json()["detail"] == "Cross-origin request blocked"
 
 
+def test_csrf_guard_blocks_authenticated_mutation_without_origin_or_referer():
+    from fastapi.testclient import TestClient
+    from server import app
+
+    client = TestClient(app)
+    client.cookies.set("access_token", "test-cookie")
+    response = client.post("/api/auth/refresh")
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Cross-origin request blocked"
+
+
 def test_csrf_guard_allows_configured_origin():
     from fastapi.testclient import TestClient
     from server import app
