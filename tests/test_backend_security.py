@@ -3,23 +3,38 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
-# Ensure the test imports Aegis' backend/server.py rather than any preloaded
-# third-party module also named `server`.
-sys.modules.pop("server", None)
+
+_AEGIS_APP = None
+
 
 def _aegis_app():
-    """Load the repository's backend/server.py explicitly, avoiding module-name collisions."""
+    """Load and cache Aegis' backend app from the repository, avoiding module collisions."""
+    global _AEGIS_APP
+    if _AEGIS_APP is not None:
+        return _AEGIS_APP
+
     backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend"))
-    server_path = os.path.join(backend_dir, "server.py")
     sys.path.insert(0, backend_dir)
-    sys.modules.pop("server", None)
+
+    # The backend intentionally uses top-level imports (config, routers, anomaly,
+    # etc.). Remove any preloaded modules with those names so server.py and all of
+    # its routers resolve against this checkout rather than an unrelated module.
+    aegis_modules = {
+        "server", "config", "database", "deps", "models", "seed",
+        "auth_helpers", "security_hardening", "sso", "anomaly",
+    }
+    for name in list(sys.modules):
+        if name in aegis_modules or name == "routers" or name.startswith("routers."):
+            sys.modules.pop(name, None)
+
+    server_path = os.path.join(backend_dir, "server.py")
     spec = importlib.util.spec_from_file_location("server", server_path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules["server"] = module
     spec.loader.exec_module(module)
-    return module.app
-
+    _AEGIS_APP = module.app
+    return _AEGIS_APP
 os.environ.update({
     "MONGO_URL": "mongodb://localhost:27017",
     "DB_NAME": "aegis_test",
