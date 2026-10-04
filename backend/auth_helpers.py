@@ -95,8 +95,9 @@ def totp(secret_b32: str, timestamp: Optional[float] = None) -> str:
     return f"{number % 1_000_000:06d}"
 
 
-def verify_totp(secret_b32: str, code: str) -> bool:
-    now = datetime.now(timezone.utc).timestamp()
+def verify_totp(secret_b32: str, code: str, timestamp: Optional[float] = None) -> bool:
+    """Verify a TOTP code within the current, previous, or next 30-second step."""
+    now = datetime.now(timezone.utc).timestamp() if timestamp is None else timestamp
     return any(
         hmac.compare_digest(totp(secret_b32, now + drift * 30), code)
         for drift in (-1, 0, 1)
