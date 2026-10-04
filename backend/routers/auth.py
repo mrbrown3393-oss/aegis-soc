@@ -49,6 +49,8 @@ from models import (
     PasswordResetConfirm,
 )
 from security_hardening import forwarded_client_ip
+from zero_trust import device_fingerprint
+from step_up import create_step_up_token
 import jwt
 
 router = APIRouter(tags=["auth"])
@@ -189,6 +191,28 @@ async def mfa_verify(body: dict, request: Request, response: Response):
         "role": user["role"],
         "tenant": user["tenant"],
     }
+
+
+@router.post("/auth/step-up")
+async def step_up(body: dict, request: Request, response: Response, user: dict = Depends(get_current_user)):
+    """Re-authenticate with the enrolled TOTP factor for high-impact actions."""
+    code = str(body.get("code", "")).strip()
+    encrypted = user.get("mfa_secret_enc")
+    if not encrypted or not user.get("mfaEnrolledAt"):
+        raise HTTPException(status_code=409, detail="MFA enrollment required")
+    ip = forwarded_client_ip(request, settings.TRUSTED_PROXY_IPS)
+    await check_mfa_lockout(ip, user["id"])
+    secret = decrypt_mfa_secret(user["id"], encrypted)
+    if not verify_totp(secret, code):
+        await record_mfa_failure(ip, user["id"])
+        raise HTTPException(status_code=401, detail="Invalid MFA code")
+    await clear_mfa_failures(ip, user["id"])
+    access_payload = decode_jwt(request.cookies["access_token"])
+    token = create_step_up_token(access_payload["sid"], device_fingerprint(request))
+    secure = settings.AEGIS_ENV.lower() == "production"
+    response.set_cookie("step_up", token, httponly=True, secure=secure, samesite="strict" if secure else "lax", max_age=600, path="/")
+    await write_audit(user["email"], "step_up_verify", "auth", request, user.get("tenant", ""))
+    return {"message": "Step-up authentication verified", "expiresIn": 600}
 
 
 @router.post("/auth/logout")
