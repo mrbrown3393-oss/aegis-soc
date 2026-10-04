@@ -64,3 +64,29 @@ def test_high_rate_is_blocked():
         assert second.json()["reason"] == "edge-rate-limit"
     finally:
         policy._max_requests = original_limit
+
+def test_authz_returns_signed_headers_for_trusted_ingress():
+    response = client.get(
+        "/v1/authz",
+        headers={
+            "X-Original-Method": "GET",
+            "X-Original-URI": "/api/threats",
+            "X-Client-IP": "192.0.2.30",
+        },
+    )
+    assert response.status_code == 204
+    assert response.headers["x-aegis-edge-decision"]
+    assert len(response.headers["x-aegis-edge-signature"]) == 64
+    assert response.headers["x-aegis-edge-client-ip"] == "192.0.2.30"
+
+
+def test_authz_rejects_malformed_original_uri():
+    response = client.get(
+        "/v1/authz",
+        headers={
+            "X-Original-Method": "GET",
+            "X-Original-URI": "https://attacker.example/api/threats",
+            "X-Client-IP": "192.0.2.31",
+        },
+    )
+    assert response.status_code == 400
