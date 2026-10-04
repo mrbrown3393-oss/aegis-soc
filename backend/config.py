@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     AEGIS_ENV: str = "development"
     CORS_ALLOW_METHODS: str = "GET,POST,PATCH,DELETE,OPTIONS"
     CORS_ALLOW_HEADERS: str = "Content-Type,Authorization,X-Requested-With"
+    EDGE_ENFORCE_DECISION: bool = False
+    EDGE_VERIFY_SECRET: str = ""
+    EDGE_AUDIENCE: str = "aegis-api"
+    EDGE_MAX_CLOCK_SKEW_SECONDS: int = 30
+    EDGE_TRUSTED_CLIENT_IP_HEADER: str = "X-Aegis-Edge-Client-IP"
 
     class Config:
         env_file = ".env"
@@ -86,6 +91,11 @@ def validate_security_settings() -> None:
         raise RuntimeError("Production requires an explicit frontend/CORS origin.")
     if not settings.FRONTEND_URL.lower().startswith("https://"):
         raise RuntimeError("Production FRONTEND_URL must use HTTPS.")
+    if settings.EDGE_ENFORCE_DECISION:
+        if len(settings.EDGE_VERIFY_SECRET) < 32:
+            raise RuntimeError("Production edge enforcement requires EDGE_VERIFY_SECRET of at least 32 characters.")
+        if not settings.EDGE_AUDIENCE.strip():
+            raise RuntimeError("Production edge enforcement requires EDGE_AUDIENCE.")
     if settings.OIDC_ENABLED:
         oidc_required = {
             "OIDC_ISSUER_URL": settings.OIDC_ISSUER_URL,

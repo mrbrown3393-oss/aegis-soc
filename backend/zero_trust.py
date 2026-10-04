@@ -9,6 +9,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 from config import settings
+from edge_security import verify_edge_decision
 
 PUBLIC_PATHS = {
     "/",
@@ -70,6 +71,7 @@ class ZeroTrustMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         request_id(request)
         try:
+            verify_edge_decision(request)
             enforce_protected_path(request)
         except HTTPException as exc:
             response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})

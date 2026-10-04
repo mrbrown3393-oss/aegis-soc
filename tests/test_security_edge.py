@@ -32,6 +32,11 @@ def test_admission_returns_signed_short_lived_decision():
     assert 0 <= body["risk_score"] <= 100
     assert body["expires_at"] - body["issued_at"] == 15
     assert len(body["signature"]) == 64
+    assert body["method"] == "GET"
+    assert body["path"] == "/api/threats"
+    assert body["client_ip"] == "192.0.2.10"
+    assert body["audience"] == "aegis-api"
+    assert body["nonce"]
 
 
 def test_invalid_ip_is_rejected():
