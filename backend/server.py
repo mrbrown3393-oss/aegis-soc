@@ -438,6 +438,26 @@ async def clear_failed_attempts(ip: str, email: str) -> None:
     await db.login_attempts.delete_one({"key": f"{ip}:{email}"})
 
 
+
+async def check_password_reset_rate_limit(ip: str, email: str) -> None:
+    key = f"reset:{ip}:{email}"
+    attempt = await db.login_attempts.find_one({"key": key})
+    now = datetime.now(timezone.utc)
+    if attempt and attempt.get("locked_until") and now < attempt["locked_until"]:
+        raise HTTPException(status_code=429, detail="Too many password reset requests")
+
+
+async def record_password_reset_attempt(ip: str, email: str) -> None:
+    key = f"reset:{ip}:{email}"
+    now = datetime.now(timezone.utc)
+    attempt = await db.login_attempts.find_one({"key": key})
+    count = (attempt.get("count", 0) if attempt else 0) + 1
+    update = {"$set": {"count": count, "last_attempt": now}}
+    if count >= LOCKOUT_THRESHOLD:
+        update["$set"]["locked_until"] = now + timedelta(minutes=LOCKOUT_MINUTES)
+    await db.login_attempts.update_one({"key": key}, update, upsert=True)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Pydantic models
 # ─────────────────────────────────────────────────────────────────────────────
@@ -489,6 +509,8 @@ async def on_startup():
     await db.users.create_index("id", unique=True)
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.login_attempts.create_index("key", unique=True)
+    await db.auth_sessions.create_index("session_id", unique=True)
+    await db.auth_sessions.create_index("expires_at", expireAfterSeconds=0)
     for col in ("threats", "incidents", "vulnerabilities", "assets", "compliance", "audit_logs"):
         await db[col].create_index([("tenant", 1), ("timestamp", -1)])
     await seed_users()
@@ -743,25 +765,40 @@ async def refresh(request: Request, response: Response):
         raise HTTPException(status_code=401, detail="No refresh token")
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
-        if payload.get("type") != "refresh":
+        if payload.get("type") != "refresh" or not payload.get("sid") or not payload.get("jti"):
             raise HTTPException(status_code=401, detail="Invalid token type")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    now = datetime.now(timezone.utc)
+    session = await db.auth_sessions.find_one_and_update(
+        {
+            "session_id": payload["sid"],
+            "user_id": payload["sub"],
+            "refresh_jti": payload["jti"],
+            "revoked_at": None,
+            "expires_at": {"$gt": now},
+        },
+        {"$set": {"revoked_at": now}},
+    )
+    if not session:
+        raise HTTPException(status_code=401, detail="Refresh token revoked or already used")
     user = await db.users.find_one({"id": payload["sub"]})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
-    access = create_access_token(user["id"], user["email"], user["role"], user["tenant"])
-    secure = settings.AEGIS_ENV.lower() == "production"
-    samesite = "strict" if secure else "lax"
-    response.set_cookie(
-        key="access_token", value=access, httponly=True, secure=secure,
-        samesite=samesite, max_age=ACCESS_TOKEN_MINUTES * 60, path="/",
-    )
+
+    session_id, refresh_jti = await create_auth_session(user["id"])
+    access = create_access_token(user["id"], user["email"], user["role"], user["tenant"], session_id)
+    refresh_token = create_refresh_token(user["id"], session_id, refresh_jti)
+    set_auth_cookies(response, access, refresh_token)
     return {"message": "Token refreshed"}
 
 
 @api_router.post("/auth/password-reset/request")
 async def password_reset_request(body: PasswordResetRequest, request: Request):
+    ip = forwarded_client_ip(request, settings.TRUSTED_PROXY_IPS)
+    await check_password_reset_rate_limit(ip, body.email)
+    await record_password_reset_attempt(ip, body.email)
     user = await db.users.find_one({"email": body.email})
     # Always return success — prevents enumeration
     if user:
@@ -799,10 +836,14 @@ async def password_reset_confirm(body: PasswordResetConfirm, request: Request):
     if consumed.modified_count != 1:
         raise HTTPException(status_code=400, detail="Invalid or expired reset token")
 
+    user = await db.users.find_one({"email": record["email"]})
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
     await db.users.update_one(
         {"email": record["email"]},
         {"$set": {"password_hash": hash_password(body.new_password)}},
     )
+    await revoke_user_sessions(user["id"])
     await write_audit(record["email"], "password_reset_confirm", "auth", request)
     return {"message": "Password updated. Please log in."}
 
