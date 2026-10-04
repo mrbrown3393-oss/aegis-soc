@@ -28,6 +28,7 @@ if (NODE_ENV === 'production') {
   if (JWT_SECRET.length < 32) throw new Error('Production requires JWT_SECRET >= 32 characters.');
   if (!CORS_ORIGIN || CORS_ORIGIN === '*') throw new Error('Production requires an explicit CORS_ORIGIN.');
   if (!/^https:\/\//i.test(CORS_ORIGIN)) throw new Error('Production CORS_ORIGIN must use HTTPS.');
+  if ((process.env.MFA_MASTER_SECRET || '').length < 32) throw new Error('Production requires MFA_MASTER_SECRET >= 32 characters.');
 }
 
 export const config = {
@@ -46,5 +47,7 @@ export const config = {
   XAI_MODEL: process.env.XAI_MODEL || 'grok-4',
   XAI_TIMEOUT_MS: Number(process.env.XAI_TIMEOUT_MS || 25000),
   COOKIE_SECURE: NODE_ENV === 'production',
-  COOKIE_SAMESITE: process.env.COOKIE_SAMESITE || (NODE_ENV === 'production' ? 'strict' : 'lax')
+  COOKIE_SAMESITE: process.env.COOKIE_SAMESITE || (NODE_ENV === 'production' ? 'strict' : 'lax'),
+  MFA_REQUIRED: process.env.MFA_REQUIRED !== 'false',
+  MFA_MASTER_SECRET: process.env.MFA_MASTER_SECRET || ''
 };
