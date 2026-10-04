@@ -517,7 +517,14 @@ class UserInvite(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     role: Role
     tenant: Tenant
-    password: str = Field(min_length=6)
+    password: str = Field(min_length=12, max_length=72)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_bytes(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must be at most 72 UTF-8 bytes")
+        return value
 
 
 # ─────────────────────────────────────────────────────────────────────────────
