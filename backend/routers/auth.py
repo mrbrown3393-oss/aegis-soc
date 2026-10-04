@@ -257,6 +257,25 @@ async def refresh(request: Request, response: Response):
     if not session:
         raise HTTPException(status_code=401, detail="Session revoked or expired")
 
+    # Refresh is an authenticated session operation too: do not let a stolen
+    # refresh cookie move a bound session to a different device context.
+    current_fingerprint = device_fingerprint(request)
+    stored_fingerprint = session.get("device_fingerprint")
+    if stored_fingerprint and not secrets.compare_digest(stored_fingerprint, current_fingerprint):
+        await db.auth_sessions.update_one(
+            {
+                "session_id": payload["sid"],
+                "user_id": payload["sub"],
+                "refresh_jti": payload["jti"],
+                "revoked_at": None,
+            },
+            {"$set": {
+                "revoked_at": datetime.now(timezone.utc),
+                "revoke_reason": "device_context_changed_on_refresh",
+            }},
+        )
+        raise HTTPException(status_code=401, detail="Session device context changed")
+
     user = await db.users.find_one({"id": payload["sub"]})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
