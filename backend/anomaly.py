@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
-from server import db, get_current_user, tenant_filter, write_audit
+from server import db, require_role, tenant_filter, write_audit
 
 anomaly_router = APIRouter(prefix="/api/security", tags=["security-analytics"])
 
@@ -31,7 +31,11 @@ def _distance_km(a: TelemetryPoint, b: TelemetryPoint) -> float:
     return 2*r*math.asin(math.sqrt(h))
 
 @anomaly_router.post("/telemetry/fuse")
-async def fuse_telemetry(points: list[TelemetryPoint], request: Request, user: dict = Depends(get_current_user)):
+async def fuse_telemetry(
+    points: list[TelemetryPoint],
+    request: Request,
+    user: dict = Depends(require_role("owner", "admin", "analyst")),
+):
     if not points: raise HTTPException(400, "At least one telemetry point is required")
     ids=[]
     for point in points:
