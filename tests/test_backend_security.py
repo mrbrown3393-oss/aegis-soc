@@ -636,3 +636,134 @@ def test_user_delete_is_atomic_and_tenant_scoped(monkeypatch):
 
     assert fake.users.find_filters == [{"id": "target-id", "tenant": "government"}]
     assert fake.users.delete_filters == [{"id": "target-id", "tenant": "government"}]
+
+
+def test_owner_tenant_scope_is_explicit_for_requested_and_all_tenants(monkeypatch):
+    import asyncio
+    from routers import incidents, resources, threats, vulnerabilities
+    from deps import tenant_filter
+
+    class Cursor:
+        def sort(self, *args, **kwargs):
+            return self
+        async def to_list(self, limit):
+            return []
+
+    class Collection:
+        def __init__(self):
+            self.filters = []
+        def find(self, filt, *args):
+            self.filters.append(filt.copy())
+            return Cursor()
+
+    class FakeDB:
+        def __init__(self):
+            self.incidents = Collection()
+            self.assets = Collection()
+            self.threats = Collection()
+            self.vulnerabilities = Collection()
+            self.compliance = Collection()
+            self.audit_logs = Collection()
+
+    fake = FakeDB()
+    for module in (incidents, resources, threats, vulnerabilities):
+        monkeypatch.setattr(module, "db", fake)
+
+    owner = {"role": "owner", "tenant": "saas"}
+
+    async def run():
+        await incidents.list_incidents("government", owner)
+        await resources.list_assets("private", owner)
+        await threats.list_threats(50, None, "saas", owner)
+        await vulnerabilities.list_vulns("government", owner)
+        await resources.list_audit_logs("all", 10, owner)
+
+    asyncio.run(run())
+
+    assert fake.incidents.filters[-1] == {"tenant": "government"}
+    assert fake.assets.filters[-1] == {"tenant": "private"}
+    assert fake.threats.filters[-1] == {"tenant": "saas"}
+    assert fake.vulnerabilities.filters[-1] == {"tenant": "government"}
+    assert fake.audit_logs.filters[-1] == {}
+
+    assert tenant_filter(owner, "all") == {}
+    assert tenant_filter(owner, None) == {}
+
+
+def test_live_threat_is_bound_to_authenticated_tenant(monkeypatch):
+    import asyncio
+    from routers import threats
+
+    inserted = []
+
+    class Collection:
+        async def insert_one(self, document):
+            inserted.append(document.copy())
+
+    class FakeDB:
+        def __init__(self):
+            self.threats = Collection()
+
+    monkeypatch.setattr(threats, "db", FakeDB())
+
+    async def run():
+        result = await threats.threats_live(
+            {"role": "analyst", "tenant": "private", "email": "analyst@example.com"}
+        )
+        assert result["tenant"] == "private"
+
+    asyncio.run(run())
+
+    assert len(inserted) == 1
+    assert inserted[0]["tenant"] == "private"
+
+
+def test_owner_can_delete_cross_tenant_non_owner(monkeypatch):
+    import asyncio
+    from routers import users
+
+    class Result:
+        deleted_count = 1
+
+    class Collection:
+        def __init__(self):
+            self.find_filters = []
+            self.delete_filters = []
+
+        async def find_one(self, filt):
+            self.find_filters.append(filt.copy())
+            return {
+                "id": filt["id"],
+                "email": "private-user@example.com",
+                "role": "viewer",
+                "tenant": "private",
+            }
+
+        async def delete_one(self, filt):
+            self.delete_filters.append(filt.copy())
+            return Result()
+
+    class FakeDB:
+        def __init__(self):
+            self.users = Collection()
+
+    fake = FakeDB()
+    monkeypatch.setattr(users, "db", fake)
+    monkeypatch.setattr(users, "write_audit", lambda *args, **kwargs: asyncio.sleep(0))
+
+    class Request:
+        class Client:
+            host = "127.0.0.1"
+        client = Client()
+
+    async def run():
+        await users.delete_user(
+            "private-user",
+            Request(),
+            {"role": "owner", "tenant": "government", "email": "owner@example.com"},
+        )
+
+    asyncio.run(run())
+
+    assert fake.users.find_filters == [{"id": "private-user"}]
+    assert fake.users.delete_filters == [{"id": "private-user"}]
