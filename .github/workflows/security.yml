@@ -5,32 +5,52 @@ on:
   pull_request:
   schedule:
     - cron: "17 3 * * 1"
+
 permissions:
   contents: read
   pull-requests: read
   security-events: write
+
 jobs:
   security:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+
       - run: python -m pip install --upgrade pip cyclonedx-bom pip-audit
       - run: pip install -r backend/requirements.txt
-      - run: cyclonedx-py requirements backend/requirements.txt --output-format json --output-file sbom-python.json
+
+      - name: Generate Python SBOM
+        run: cyclonedx-py requirements backend/requirements.txt --output-format json --output-file sbom-python.json
+
       - uses: actions/setup-node@v6
         with:
           node-version: "20"
-      - run: npm install --ignore-scripts --no-audit --no-fund
-      - run: cd client && npm install --ignore-scripts --no-audit --no-fund
-      - run: npx @cyclonedx/cyclonedx-npm --output-file sbom-node.json --output-format JSON
+          cache: npm
+          cache-dependency-path: client/package.json
+
+      - name: Install client dependencies
+        working-directory: client
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Generate Node SBOM
+        working-directory: client
+        run: npx @cyclonedx/cyclonedx-npm --output-file ../sbom-node.json --output-format JSON
+
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - run: pip-audit -r backend/requirements.txt
-      - run: npm audit --audit-level=high --omit=dev
+
+      - name: Audit client dependencies
+        working-directory: client
+        run: npm audit --audit-level=high --omit=dev
+
       - uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
@@ -38,6 +58,7 @@ jobs:
           format: table
           exit-code: "1"
           severity: CRITICAL,HIGH
+
       - uses: actions/upload-artifact@v5
         with:
           name: aegis-soc-sbom
