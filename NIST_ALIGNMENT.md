@@ -10,6 +10,8 @@
 >
 > **It is not a System Security Plan (SSP), not a 3PAO package, and not a certification claim.**  
 > Status values match the dossier taxonomy: **IMPLEMENTED** · **PARTIAL** · **PLANNED** · **NOT APPLICABLE**.
+>
+> For the **FedRAMP Moderate** design-target view (boundary, inheritance, gap matrix, authorization path), see `docs/FEDRAMP_MODERATE_BASELINE.md`.
 
 ---
 
@@ -19,6 +21,7 @@
 2. Verify every **IMPLEMENTED** claim against the Evidence column (source path or artifact).
 3. Cross-read `SECURITY_DOSSIER.md` for narrative context, residual risk, and the POA&M.
 4. `SECURITY.md` is the short entry point; this file is the 800-53 control catalog appendix.
+5. `docs/FEDRAMP_MODERATE_BASELINE.md` selects Moderate-priority controls and shared responsibility for government diligence.
 
 ### Coverage summary (selected controls)
 
@@ -186,7 +189,7 @@ Percentages in the dossier (~48% direct / ~79% direct+partial at v1.0) improve a
 | Control | Title | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | PL-1 | Security Planning Policy | **IMPLEMENTED** | `docs/SECURITY_POLICY_PACK.md` |
-| PL-2 | System Security Plan | **PARTIAL** | Dossier + this appendix serve as interim SSP content; formal SSP for ATO **PLANNED** |
+| PL-2 | System Security Plan | **PARTIAL** | Dossier + this appendix + FedRAMP baseline map serve as interim SSP content; formal SSP for ATO **PLANNED** |
 | PL-4 | Rules of Behavior | **PLANNED** | — |
 | PL-8 | Security and Privacy Architectures | **PARTIAL** | Documented in dossier (ZTA mapping, tenancy model) |
 
@@ -325,7 +328,7 @@ Percentages in the dossier (~48% direct / ~79% direct+partial at v1.0) improve a
 
 | Version | Date | Change | Author |
 | --- | --- | --- | --- |
-| 1.0 | 2026-10-04 | Initial NIST SP 800-53 Rev 5 appendix aligned to dossier v1.1 and hardening branch (MFA, headers, CSRF, Mongo TLS, IR/policy artifacts, CI scanning). | William Brown / Grok |
+| 1.0 | 2026-10-04 | Initial NIST SP 800-53 Rev 5 appendix aligned to dossier v1.1 and hardening branch (MFA, headers, CSRF, Mongo TLS, IR/policy artifacts, CI scanning). Cross-linked FedRAMP Moderate baseline map. | William Brown / Grok |
 
 ---
 
@@ -335,6 +338,7 @@ Percentages in the dossier (~48% direct / ~79% direct+partial at v1.0) improve a
 | --- | --- |
 | Security summary | `SECURITY.md` |
 | Security & Compliance Dossier | `SECURITY_DOSSIER.md` |
+| FedRAMP Moderate baseline map | `docs/FEDRAMP_MODERATE_BASELINE.md` |
 | Information Security Policy Pack | `docs/SECURITY_POLICY_PACK.md` |
 | Incident Response Plan | `docs/INCIDENT_RESPONSE_PLAN.md` |
 | Hardening notes | `SECURITY_HARDENING.md` |
