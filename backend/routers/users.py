@@ -57,7 +57,7 @@ async def invite_user(
 async def delete_user(
     user_id: str,
     request: Request,
-    user: dict = Depends(require_role("owner", "admin")),
+    user: dict = Depends(require_step_up_role("owner", "admin")),
 ):
     target_filter = {"id": user_id}
     if user["role"] != "owner":
