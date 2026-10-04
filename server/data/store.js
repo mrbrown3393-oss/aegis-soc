@@ -141,14 +141,14 @@ for (let i = 0; i < 50; i++) {
   store.events.push(e);
 }
 
-export function addAudit(actor, action, resource, outcome = 'success', details = '') {
+export function addAudit(actor, action, resource, outcome = 'success', details = '', ip = '') {
   store.auditLog.unshift({
     id: `aud-${uuid().slice(0, 8)}`,
     ts: new Date().toISOString(),
     actor,
     action,
     resource,
-    ip: '10.20.1.5',
+    ip: ip || 'unknown',
     outcome,
     details
   });
