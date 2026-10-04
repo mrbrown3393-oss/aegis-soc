@@ -23,7 +23,7 @@ Aegis SOC is a modular, multi-tenant Security Operations Center platform unifyin
 
 **Stack**: FastAPI + MongoDB + React 19 / Vite 6 / TypeScript, deployed behind Kubernetes ingress.
 
-**FedRAMP Moderate** is a design target only. See `docs/FEDRAMP_MODERATE_BASELINE.md` for the control mapping, shared-responsibility model, and authorization gap matrix. Aegis holds **no FedRAMP authorization** as of this document’s date.
+**FedRAMP Moderate** is a design target only. See `docs/FEDRAMP_MODERATE_BASELINE.md` for the control mapping and gap matrix, and `docs/FEDRAMP_CRM_AND_PARAMETERS.md` for the Customer Responsibility Matrix and organization-defined parameter register. Aegis holds **no FedRAMP authorization** as of this document’s date.
 
 ---
 
@@ -92,7 +92,8 @@ Aegis SOC is a modular, multi-tenant Security Operations Center platform unifyin
 | --- | --- | --- |
 | **Security Dossier** | `SECURITY_DOSSIER.md` | Primary security artifact: NIST CSF 2.0 mapping, NIST SP 800-207 Zero Trust, compliance readiness, evidence catalog, and POA&M. |
 | **NIST Alignment** | `NIST_ALIGNMENT.md` | Detailed NIST SP 800-53 Rev 5 control appendix. |
-| **FedRAMP Moderate Baseline** | `docs/FEDRAMP_MODERATE_BASELINE.md` | FedRAMP Moderate design-target mapping, shared responsibility, authorization gap matrix, and path to readiness. **Not an ATO or SSP.** |
+| **FedRAMP Moderate Baseline** | `docs/FEDRAMP_MODERATE_BASELINE.md` | FedRAMP Moderate design-target mapping, authorization gap matrix, and path to readiness. **Not an ATO or SSP.** |
+| **FedRAMP CRM & Parameters** | `docs/FEDRAMP_CRM_AND_PARAMETERS.md` | Customer Responsibility Matrix (Aegis / Customer / CSP) and organization-defined parameter register (lockout, token lifetimes, MFA, TLS, retention, patch SLAs, production fail-closed checks). |
 | **Security Hardening Notes** | `SECURITY_HARDENING.md` | Release notes for the hardening branch: what was implemented and deployment notes. |
 | **Information Security Policy Pack** | `docs/SECURITY_POLICY_PACK.md` | Formal policy baseline: access control, data classification, cryptography, secure development, vulnerability management (24h critical / 7d high / 30d medium / 90d low), logging, IR, BCP, supply chain, governance. |
 | **Incident Response Plan** | `docs/INCIDENT_RESPONSE_PLAN.md` | Platform IR plan: SEV-1..4 severity model, roles, NIST 800-61 lifecycle, evidence handling, communications, review cadence. |
