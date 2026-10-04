@@ -2,6 +2,9 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+# Ensure the test imports Aegis' backend/server.py rather than any preloaded
+# third-party module also named `server`.
+sys.modules.pop("server", None)
 
 os.environ.update({
     "MONGO_URL": "mongodb://localhost:27017",
