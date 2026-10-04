@@ -71,8 +71,8 @@ def test_backend_imports_and_security_routes():
     assert f"{anomaly_router.prefix}/quarantine" in anomaly_paths
     assert "/api/auth/login" in {f"/api{path}" for path in auth_paths}
     assert sso_router.prefix == "/api/auth/sso"
-    assert "/api/auth/sso/oidc/login" in {f"{sso_router.prefix}{path}" for path in sso_paths}
-    assert "/api/auth/sso/saml/login" in {f"{sso_router.prefix}{path}" for path in sso_paths}
+    assert "/api/auth/sso/oidc/login" in sso_paths
+    assert "/api/auth/sso/saml/login" in sso_paths
 
 
 def test_security_headers_middleware_is_registered():
