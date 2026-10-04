@@ -120,22 +120,22 @@ uvicorn server:app --host 0.0.0.0 --port 8001 --reload
 
 ```bash
 curl http://localhost:8001/api/
+# Create your own local credentials in .env, then use them with the login endpoint.
 curl -c c.txt -X POST http://localhost:8001/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"william.brown@aegis-soc.io","password":"AegisOwner2025!"}'
+  -d '{"email":"YOUR_ADMIN_EMAIL","password":"YOUR_ADMIN_PASSWORD"}'
 curl -b c.txt "http://localhost:8001/api/metrics/overview?tenant=all"
 ```
 
 ## Environment Variables
 
-See `backend/.env.example`. All secrets load from environment — never hardcoded.
+See `backend/.env.example`. Secrets must be supplied through the environment or an external secret manager; production startup rejects unsafe defaults.
 
-## Default Credentials (DEMO ONLY — rotate before any non-demo deployment)
+## Credentials and production safety
 
-| Role | Email | Password | Tenant |
-| --- | --- | --- | --- |
-| **Owner** | `william.brown@aegis-soc.io` | `AegisOwner2025!` | `saas` (sees all) |
-| Analyst | `analyst@aegis-soc.io` | `Analyst2025!` | `government` |
+No working demo passwords are published in this repository. Set `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ANALYST_EMAIL`, and `ANALYST_PASSWORD` in your local environment before starting the API.
+
+Set `AEGIS_ENV=production` for production deployments. In production, startup fails closed if the JWT secret is weak/default, operator passwords are default, MongoDB TLS is disabled, invalid MongoDB certificates are allowed, CORS uses a wildcard, or the frontend origin is not HTTPS.
 
 ## API Reference
 
@@ -200,7 +200,7 @@ Seeding is **idempotent**. To re-seed, drop the collections and restart.
 
 - Passwords hashed with bcrypt (never plaintext).
 - JWTs in httpOnly cookies.
-- CORS origin-whitelisted (not `*`) with `allow_credentials=true`.
+- CORS uses explicit, configurable origins, methods, and headers; wildcard origins are rejected in production.
 - Unique index on `users.email`; TTL indexes on reset tokens and login attempts.
 - Brute-force lockout on login.
 - All mutating actions logged to the immutable audit trail.
