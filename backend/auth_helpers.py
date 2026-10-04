@@ -269,7 +269,7 @@ def create_refresh_token(user_id: str, session_id: str, jti: str) -> str:
     return encode_jwt(payload)
 
 
-async def create_auth_session(user_id: str) -> tuple[str, str]:
+async def create_auth_session(user_id: str, device_fingerprint_value: str | None = None) -> tuple[str, str]:
     """Create a server-side session so logout/reset can revoke JWTs immediately."""
     session_id = secrets.token_urlsafe(24)
     refresh_jti = secrets.token_urlsafe(24)
@@ -278,6 +278,7 @@ async def create_auth_session(user_id: str) -> tuple[str, str]:
         "session_id": session_id,
         "user_id": user_id,
         "refresh_jti": refresh_jti,
+        "device_fingerprint": device_fingerprint_value,
         "created_at": now,
         "expires_at": now + timedelta(days=REFRESH_TOKEN_DAYS),
         "revoked_at": None,
