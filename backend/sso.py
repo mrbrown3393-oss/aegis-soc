@@ -11,10 +11,10 @@ import httpx
 import jwt
 from fastapi import APIRouter, HTTPException, Request
 
-from zero_trust import device_fingerprint
 from fastapi.responses import RedirectResponse
 
-from auth_helpers import create_access_token, create_auth_session, create_refresh_token, set_auth_cookies
+from auth_helpers import create_access_token, create_refresh_token, set_auth_cookies
+from session_security import create_bound_auth_session
 from config import settings
 from database import db
 from deps import write_audit
@@ -263,7 +263,7 @@ async def oidc_callback(request: Request):
         })
         user = await db.users.find_one({"id": user_id})
 
-    session_id, refresh_jti = await create_auth_session(user["id"], device_fingerprint(request))
+    session_id, refresh_jti = await create_bound_auth_session(user["id"], request)
     access = create_access_token(user["id"], user["email"], user["role"], user["tenant"], session_id)
     refresh = create_refresh_token(user["id"], session_id, refresh_jti)
     response = RedirectResponse(settings.OIDC_SUCCESS_REDIRECT_URL, status_code=303)
