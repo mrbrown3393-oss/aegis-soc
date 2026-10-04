@@ -251,7 +251,6 @@ async def refresh(request: Request, response: Response):
     session = await db.auth_sessions.find_one({
         "session_id": payload["sid"],
         "user_id": payload["sub"],
-        "refresh_jti": payload["jti"],
         "revoked_at": None,
         "expires_at": {"$gt": datetime.now(timezone.utc)},
     })
