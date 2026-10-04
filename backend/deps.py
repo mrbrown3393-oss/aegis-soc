@@ -12,10 +12,11 @@ from auth_helpers import active_session, enforce_authenticated_rate_limit, decod
 from config import settings
 from database import db
 from security_hardening import forwarded_client_ip
+from zero_trust import device_fingerprint, request_id
 
 
 async def get_current_user(request: Request) -> dict:
-    """Re-fetches the user from Mongo on every call (session revalidation)."""
+    """Re-fetch the user and trust context from Mongo on every protected request."""
     token = request.cookies.get("access_token")
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
@@ -30,6 +31,33 @@ async def get_current_user(request: Request) -> dict:
 
     if not await active_session(payload["sid"], payload["sub"]):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session revoked or expired")
+
+    session = await db.auth_sessions.find_one({
+        "session_id": payload["sid"],
+        "user_id": payload["sub"],
+        "revoked_at": None,
+        "expires_at": {"$gt": datetime.now(timezone.utc)},
+    })
+    if not session:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session revoked or expired")
+
+    # Bind the session to the browser/device context. Existing sessions are
+    # enrolled on first use; subsequent context changes fail closed.
+    fingerprint = device_fingerprint(request)
+    stored_fingerprint = session.get("device_fingerprint")
+    if stored_fingerprint:
+        if not secrets.compare_digest(stored_fingerprint, fingerprint):
+            await db.auth_sessions.update_one(
+                {"session_id": payload["sid"], "user_id": payload["sub"], "revoked_at": None},
+                {"$set": {"revoked_at": datetime.now(timezone.utc), "revoke_reason": "device_context_changed"}},
+            )
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session device context changed")
+    else:
+        await db.auth_sessions.update_one(
+            {"session_id": payload["sid"], "user_id": payload["sub"], "revoked_at": None},
+            {"$set": {"device_fingerprint": fingerprint}},
+        )
+
     ip = forwarded_client_ip(request, settings.TRUSTED_PROXY_IPS)
     await enforce_authenticated_rate_limit(ip, payload["sub"])
     user = await db.users.find_one({"id": payload["sub"]})
@@ -48,11 +76,13 @@ def require_role(*roles: str):
 
 
 def tenant_filter(user: dict, requested: Optional[str] = None) -> dict:
-    """Only the owner may cross tenant boundaries; all other roles stay on their own tenant."""
+    """Default-deny tenant scope; cross-tenant access must be explicitly requested."""
     if user["role"] == "owner":
-        if requested and requested != "all":
-            return {"tenant": requested}
-        return {}  # all tenants
+        if requested == "all":
+            return {}
+        # Owners operate within their current tenant unless they explicitly
+        # select another tenant. This prevents accidental portfolio-wide reads.
+        return {"tenant": requested or user["tenant"]}
     return {"tenant": user["tenant"]}
 
 
@@ -70,5 +100,7 @@ async def write_audit(
         "resource": resource,
         "ip": forwarded_client_ip(request, settings.TRUSTED_PROXY_IPS),
         "tenant": tenant,
+        "request_id": request_id(request),
+        "tenant_scope": tenant or "unspecified",
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
