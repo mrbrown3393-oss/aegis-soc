@@ -69,7 +69,7 @@ def test_backend_imports_and_security_routes():
     assert anomaly_router.prefix == "/api/security"
     assert f"{anomaly_router.prefix}/telemetry/fuse" in anomaly_paths
     assert f"{anomaly_router.prefix}/quarantine" in anomaly_paths
-    assert "/auth/login" in {f"/api{path}" for path in auth_paths}
+    assert "/api/auth/login" in {f"/api{path}" for path in auth_paths}
     assert sso_router.prefix == "/api/auth/sso"
     assert "/api/auth/sso/oidc/login" in {f"{sso_router.prefix}{path}" for path in sso_paths}
     assert "/api/auth/sso/saml/login" in {f"{sso_router.prefix}{path}" for path in sso_paths}
