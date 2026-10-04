@@ -7,7 +7,7 @@ from typing import Optional
 import jwt
 from fastapi import Depends, HTTPException, Request, status
 
-from auth_helpers import active_session, enforce_authenticated_rate_limit
+from auth_helpers import active_session, enforce_authenticated_rate_limit, decode_jwt
 from config import settings
 from database import db
 from security_hardening import forwarded_client_ip
@@ -19,7 +19,7 @@ async def get_current_user(request: Request) -> dict:
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
+        payload = decode_jwt(token)
         if payload.get("type") != "access" or not payload.get("sid"):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
     except jwt.ExpiredSignatureError:
