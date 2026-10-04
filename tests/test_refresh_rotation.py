@@ -153,6 +153,7 @@ def test_refresh_rejects_device_context_change_and_revokes_session(monkeypatch):
     asyncio.run(run())
     assert len(fake.auth_sessions.update_filters) == 1
     query, update = fake.auth_sessions.update_filters[0]
-    assert query["refresh_jti"] == "old-jti"
+    assert query["session_id"] == "session-1"
+    assert query["user_id"] == "user-1"
     assert query["revoked_at"] is None
     assert update["$set"]["revoke_reason"] == "device_context_changed_on_refresh"
