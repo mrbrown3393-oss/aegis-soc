@@ -143,7 +143,7 @@ async def csrf_origin_guard(request: Request, call_next):
 
 validate_security_settings()
 
-ACCESS_TOKEN_MINUTES = 12 * 60
+ACCESS_TOKEN_MINUTES = 15
 REFRESH_TOKEN_DAYS = 7
 LOCKOUT_THRESHOLD = 5
 LOCKOUT_MINUTES = 15
