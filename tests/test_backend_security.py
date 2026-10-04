@@ -408,6 +408,17 @@ def test_tenant_boundary_filters_apply_to_all_data_listing_routers(monkeypatch):
         def sort(self, *args, **kwargs):
             return self
 
+        def __aiter__(self):
+            self._index = 0
+            return self
+
+        async def __anext__(self):
+            if self._index >= len(self.rows):
+                raise StopAsyncIteration
+            row = self.rows[self._index]
+            self._index += 1
+            return row
+
         async def to_list(self, limit):
             return self.rows[:limit]
 
