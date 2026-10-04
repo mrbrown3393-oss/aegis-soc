@@ -39,9 +39,9 @@ jobs:
               "http://127.0.0.1:8001/api/auth/login",
               json={"email":"admin@test.io","password":"TestPass123!"},
           )
-          assert login.status_code == 200 and login.json()["mfaRequired"] is True
+          assert login.status_code == 200 and login.json()["mfaRequired"] is True, login.text
           setup = s.get("http://127.0.0.1:8001/api/auth/mfa/setup")
-          assert setup.status_code == 200
+          assert setup.status_code == 200, setup.text
           secret = setup.json()["secret"]
           key = base64.b32decode(secret + "=" * ((8 - len(secret) % 8) % 8), casefold=True)
           counter = int(time.time() // 30)
@@ -51,7 +51,7 @@ jobs:
           verify = s.post("http://127.0.0.1:8001/api/auth/mfa/verify", json={"code":code})
           assert verify.status_code == 200, verify.text
           metrics = s.get("http://127.0.0.1:8001/api/metrics/overview?tenant=all")
-          assert metrics.status_code == 200 and "total_threats" in metrics.json()
+          assert metrics.status_code == 200 and "total_threats" in metrics.json(), metrics.text
           print("Authenticated MFA smoke test passed")
           PY
 
