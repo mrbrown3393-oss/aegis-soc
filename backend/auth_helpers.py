@@ -286,15 +286,39 @@ async def check_lockout(ip: str, email: str) -> None:
         )
 
 
-async def record_failed_attempt(ip: str, email: str) -> None:
-    key = f"{ip}:{email}"
+async def _record_lockout_attempt(key: str) -> None:
+    """Atomically increment a lockout counter and set the lockout threshold."""
     now = datetime.now(timezone.utc)
-    attempt = await db.login_attempts.find_one({"key": key})
-    count = (attempt.get("count", 0) if attempt else 0) + 1
-    update = {"$set": {"count": count, "last_attempt": now}}
-    if count >= LOCKOUT_THRESHOLD:
-        update["$set"]["locked_until"] = now + timedelta(minutes=LOCKOUT_MINUTES)
-    await db.login_attempts.update_one({"key": key}, update, upsert=True)
+    locked_until = now + timedelta(minutes=LOCKOUT_MINUTES)
+    await db.login_attempts.find_one_and_update(
+        {"key": key},
+        [
+            {
+                "$set": {
+                    "count": {"$add": [{"$ifNull": ["$count", 0]}, 1]},
+                    "last_attempt": now,
+                    "locked_until": {
+                        "$cond": [
+                            {
+                                "$gte": [
+                                    {"$add": [{"$ifNull": ["$count", 0]}, 1]},
+                                    LOCKOUT_THRESHOLD,
+                                ]
+                            },
+                            locked_until,
+                            "$locked_until",
+                        ]
+                    },
+                }
+            }
+        ],
+        upsert=True,
+        return_document=ReturnDocument.AFTER,
+    )
+
+
+async def record_failed_attempt(ip: str, email: str) -> None:
+    await _record_lockout_attempt(f"{ip}:{email}")
 
 
 async def clear_failed_attempts(ip: str, email: str) -> None:
@@ -310,14 +334,7 @@ async def check_password_reset_rate_limit(ip: str, email: str) -> None:
 
 
 async def record_password_reset_attempt(ip: str, email: str) -> None:
-    key = f"reset:{ip}:{email}"
-    now = datetime.now(timezone.utc)
-    attempt = await db.login_attempts.find_one({"key": key})
-    count = (attempt.get("count", 0) if attempt else 0) + 1
-    update = {"$set": {"count": count, "last_attempt": now}}
-    if count >= LOCKOUT_THRESHOLD:
-        update["$set"]["locked_until"] = now + timedelta(minutes=LOCKOUT_MINUTES)
-    await db.login_attempts.update_one({"key": key}, update, upsert=True)
+    await _record_lockout_attempt(f"reset:{ip}:{email}")
 
 
 async def check_mfa_lockout(ip: str, user_id: str) -> None:
@@ -328,14 +345,7 @@ async def check_mfa_lockout(ip: str, user_id: str) -> None:
 
 
 async def record_mfa_failure(ip: str, user_id: str) -> None:
-    key = f"mfa:{ip}:{user_id}"
-    now = datetime.now(timezone.utc)
-    attempt = await db.login_attempts.find_one({"key": key})
-    count = (attempt.get("count", 0) if attempt else 0) + 1
-    update = {"$set": {"count": count, "last_attempt": now}}
-    if count >= LOCKOUT_THRESHOLD:
-        update["$set"]["locked_until"] = now + timedelta(minutes=LOCKOUT_MINUTES)
-    await db.login_attempts.update_one({"key": key}, update, upsert=True)
+    await _record_lockout_attempt(f"mfa:{ip}:{user_id}")
 
 
 async def clear_mfa_failures(ip: str, user_id: str) -> None:
