@@ -60,9 +60,11 @@ def test_backend_imports_and_security_routes():
     from routers.auth import router as auth_router
     from sso import sso_router
 
-    anomaly_paths = {route.path for route in anomaly_router.routes if hasattr(route, "path")}
-    auth_paths = {route.path for route in auth_router.routes if hasattr(route, "path")}
-    sso_paths = {route.path for route in sso_router.routes if hasattr(route, "path")}
+    # Route collections can contain route-like objects without a path attribute.
+    # Use getattr so the test itself cannot fail while inspecting the collection.
+    anomaly_paths = {path for route in anomaly_router.routes if (path := getattr(route, "path", None))}
+    auth_paths = {path for route in auth_router.routes if (path := getattr(route, "path", None))}
+    sso_paths = {path for route in sso_router.routes if (path := getattr(route, "path", None))}
 
     assert anomaly_router.prefix == "/api/security"
     assert "/telemetry/fuse" in anomaly_paths
