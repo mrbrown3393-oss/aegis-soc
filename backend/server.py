@@ -28,6 +28,7 @@ import hashlib
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Literal, Optional
+from urllib.parse import urlparse
 
 import bcrypt
 import jwt
@@ -102,6 +103,34 @@ def validate_security_settings() -> None:
         raise RuntimeError("Production requires an explicit frontend/CORS origin.")
     if not settings.FRONTEND_URL.lower().startswith("https://"):
         raise RuntimeError("Production FRONTEND_URL must use HTTPS.")
+
+
+def allowed_csrf_origins() -> set[str]:
+    return {
+        origin.strip().rstrip("/")
+        for origin in settings.CORS_ORIGINS.split(",")
+        if origin.strip()
+    } | {settings.FRONTEND_URL.strip().rstrip("/")}
+
+
+@app.middleware("http")
+async def csrf_origin_guard(request: Request, call_next):
+    """Reject cross-origin state-changing browser requests that carry Aegis auth cookies."""
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and (
+        request.cookies.get("access_token") or request.cookies.get("refresh_token")
+    ):
+        origin = request.headers.get("origin")
+        referer = request.headers.get("referer")
+        if origin:
+            source = origin.rstrip("/")
+        elif referer:
+            parsed = urlparse(referer)
+            source = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+        else:
+            source = None
+        if source and source not in allowed_csrf_origins():
+            return JSONResponse(status_code=403, content={"detail": "Cross-origin request blocked"})
+    return await call_next(request)
 
 
 validate_security_settings()
@@ -563,14 +592,28 @@ async def password_reset_request(body: PasswordResetRequest, request: Request):
 @api_router.post("/auth/password-reset/confirm")
 async def password_reset_confirm(body: PasswordResetConfirm, request: Request):
     token_hash = hashlib.sha256(body.token.encode()).hexdigest()
+    now = datetime.now(timezone.utc)
     record = await db.password_reset_tokens.find_one({"token_hash": token_hash, "used": False})
-    if not record:
+    if not record or record.get("expires_at", now) <= now:
         raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    # Consume the token atomically before changing the password. This prevents
+    # concurrent requests from successfully reusing the same reset token.
+    consumed = await db.password_reset_tokens.update_one(
+        {
+            "token_hash": token_hash,
+            "used": False,
+            "expires_at": {"$gt": now},
+        },
+        {"$set": {"used": True, "used_at": now}},
+    )
+    if consumed.modified_count != 1:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
     await db.users.update_one(
         {"email": record["email"]},
         {"$set": {"password_hash": hash_password(body.new_password)}},
     )
-    await db.password_reset_tokens.update_one({"token_hash": token_hash}, {"$set": {"used": True}})
     await write_audit(record["email"], "password_reset_confirm", "auth", request)
     return {"message": "Password updated. Please log in."}
 
