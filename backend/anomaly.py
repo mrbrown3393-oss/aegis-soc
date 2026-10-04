@@ -34,7 +34,7 @@ def _distance_km(a: TelemetryPoint, b: TelemetryPoint) -> float:
 async def fuse_telemetry(
     points: list[TelemetryPoint],
     request: Request,
-    user: dict = Depends(require_role("owner", "admin", "analyst")),
+    user: dict = Depends(require_role("owner", "admin", "operator")),
 ):
     if not points: raise HTTPException(400, "At least one telemetry point is required")
     ids=[]
