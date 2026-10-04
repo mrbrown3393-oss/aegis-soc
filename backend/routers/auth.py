@@ -180,7 +180,7 @@ async def mfa_verify(body: dict, request: Request, response: Response):
             {"$set": {"mfaEnrolledAt": datetime.now(timezone.utc).isoformat()}},
         )
     clear_mfa_pending_cookie(response)
-    session_id, refresh_jti = await create_auth_session(user["id"])
+    session_id, refresh_jti = await create_auth_session(user["id"], device_fingerprint(request))
     access = create_access_token(user["id"], user["email"], user["role"], user["tenant"], session_id)
     refresh = create_refresh_token(user["id"], session_id, refresh_jti)
     set_auth_cookies(response, access, refresh)
