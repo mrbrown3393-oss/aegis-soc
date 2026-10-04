@@ -19,6 +19,8 @@ from config import (
     REFRESH_TOKEN_DAYS,
     LOCKOUT_THRESHOLD,
     LOCKOUT_MINUTES,
+    AUTH_RATE_LIMIT_PER_MINUTE,
+    IDLE_TIMEOUT_MINUTES,
 )
 from database import db
 from security_hardening import forwarded_client_ip
@@ -155,6 +157,7 @@ async def create_auth_session(user_id: str) -> tuple[str, str]:
         "created_at": now,
         "expires_at": now + timedelta(days=REFRESH_TOKEN_DAYS),
         "revoked_at": None,
+        "last_activity_at": now,
     })
     return session_id, refresh_jti
 
@@ -174,13 +177,48 @@ async def revoke_user_sessions(user_id: str) -> None:
 
 
 async def active_session(session_id: str, user_id: str) -> bool:
+    """Validate the server session and enforce a rolling idle timeout."""
+    now = datetime.now(timezone.utc)
     session = await db.auth_sessions.find_one({
         "session_id": session_id,
         "user_id": user_id,
         "revoked_at": None,
-        "expires_at": {"$gt": datetime.now(timezone.utc)},
+        "expires_at": {"$gt": now},
     })
-    return session is not None
+    if not session:
+        return False
+    last_activity = session.get("last_activity_at") or session.get("created_at") or now
+    if isinstance(last_activity, str):
+        try:
+            last_activity = datetime.fromisoformat(last_activity)
+        except ValueError:
+            last_activity = now
+    if last_activity.tzinfo is None:
+        last_activity = last_activity.replace(tzinfo=timezone.utc)
+    if now - last_activity > timedelta(minutes=IDLE_TIMEOUT_MINUTES):
+        await revoke_session(session_id)
+        return False
+    await db.auth_sessions.update_one(
+        {"session_id": session_id, "user_id": user_id, "revoked_at": None},
+        {"$set": {"last_activity_at": now}},
+    )
+    return True
+
+
+async def enforce_authenticated_rate_limit(ip: str, user_id: str) -> None:
+    """Bound authenticated request volume with a Mongo-backed fixed window."""
+    now = datetime.now(timezone.utc)
+    window = now.replace(second=0, microsecond=0)
+    key = f"auth:{user_id}:{ip}:{window.isoformat()}"
+    record = await db.auth_rate_limits.find_one({"key": key})
+    count = int(record.get("count", 0)) if record else 0
+    if count >= AUTH_RATE_LIMIT_PER_MINUTE:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Rate limit exceeded")
+    await db.auth_rate_limits.update_one(
+        {"key": key},
+        {"$inc": {"count": 1}, "$setOnInsert": {"window": window}},
+        upsert=True,
+    )
 
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
