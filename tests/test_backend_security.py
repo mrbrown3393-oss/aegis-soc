@@ -544,3 +544,35 @@ def test_native_pymongo_async_driver_is_used():
     from pymongo import AsyncMongoClient
 
     assert isinstance(client, AsyncMongoClient)
+
+
+def test_runtime_audit_records_have_unique_ids(monkeypatch):
+    import asyncio
+    from deps import write_audit
+
+    class FakeAuditLogs:
+        def __init__(self):
+            self.records = []
+
+        async def insert_one(self, record):
+            self.records.append(record)
+
+    class FakeDB:
+        def __init__(self):
+            self.audit_logs = FakeAuditLogs()
+
+    fake = FakeDB()
+    monkeypatch.setattr("deps.db", fake)
+
+    class Request:
+        pass
+
+    async def run():
+        await write_audit("admin@example.com", "login", "auth", Request(), "government")
+        await write_audit("admin@example.com", "mfa_verify", "auth", Request(), "government")
+
+    asyncio.run(run())
+
+    ids = [record["id"] for record in fake.audit_logs.records]
+    assert all(ids)
+    assert len(ids) == len(set(ids))
