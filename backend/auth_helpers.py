@@ -211,15 +211,15 @@ async def enforce_authenticated_rate_limit(ip: str, user_id: str) -> None:
     now = datetime.now(timezone.utc)
     window = now.replace(second=0, microsecond=0)
     key = f"auth:{user_id}:{ip}:{window.isoformat()}"
-    record = await db.auth_rate_limits.find_one({"key": key})
-    count = int(record.get("count", 0)) if record else 0
-    if count >= AUTH_RATE_LIMIT_PER_MINUTE:
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Rate limit exceeded")
-    await db.auth_rate_limits.update_one(
+    record = await db.auth_rate_limits.find_one_and_update(
         {"key": key},
         {"$inc": {"count": 1}, "$setOnInsert": {"window": window}},
         upsert=True,
+        return_document=ReturnDocument.AFTER,
     )
+    count = int(record.get("count", 0)) if record else 0
+    if count > AUTH_RATE_LIMIT_PER_MINUTE:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Rate limit exceeded")
 
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
