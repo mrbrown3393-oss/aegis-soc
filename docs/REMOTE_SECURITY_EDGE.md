@@ -80,7 +80,7 @@ source networks. Never trust an arbitrary client-supplied forwarding header.
 
 Nginx must be built with `ngx_http_auth_request_module`; the module authorizes a
 request from the status of an internal subrequest and can expose its upstream
-response headers through `auth_request_set`. citeturn1view0
+response headers through `auth_request_set`.
 
 ## Deployment requirements
 
