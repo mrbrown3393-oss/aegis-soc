@@ -14,6 +14,32 @@ Phase 1 provides a deployable admission-decision service with:
 
 The edge does not receive Aegis passwords, refresh tokens, tenant secrets, or database credentials.
 
+## Phase 2: signed enforcement contract
+
+Phase 2 binds each admission decision to the exact HTTP method, path, client IP,
+audience, nonce, and 15-second validity window. Aegis verifies the HMAC-SHA256
+signature before application routing when EDGE_ENFORCE_DECISION=true.
+
+The trusted ingress must:
+
+1. Strip any client-supplied X-Aegis-Edge-* headers before calling Aegis.
+2. Obtain the client IP from the ingress connection/proxy trust boundary.
+3. Call the edge admission endpoint over a private authenticated channel.
+4. Forward the returned decision as X-Aegis-Edge-Decision and
+   X-Aegis-Edge-Signature.
+5. Forward the signed client IP as X-Aegis-Edge-Client-IP.
+6. Reject the request when the edge returns allow=false or the edge is unavailable.
+7. Never expose EDGE_VERIFY_SECRET or EDGE_SIGNING_SECRET to browsers.
+
+Aegis rejects missing, forged, expired, future-dated, wrong-audience, wrong-method,
+wrong-path, wrong-client-IP, or replayed decisions. The edge therefore supplies
+security context, while Aegis remains the authorization authority.
+
+The admission endpoint supports an optional Bearer EDGE_INGRESS_TOKEN for
+service-to-service caller authentication. Production deployments should set it
+and keep the edge reachable only from the trusted ingress network. mTLS between
+ingress and edge remains a later defense-in-depth phase.
+
 The intended production flow is:
 
 1. Client reaches the remote edge.

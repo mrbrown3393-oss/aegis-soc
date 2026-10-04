@@ -7,8 +7,9 @@ from zero_trust import device_fingerprint, enforce_protected_path
 
 
 class Request:
-    def __init__(self, path="/api/metrics/overview", cookies=None, headers=None):
+    def __init__(self, path="/api/metrics/overview", cookies=None, headers=None, method="GET"):
         self.url = type("URL", (), {"path": path})()
+        self.method = method
         self.cookies = cookies or {}
         self.headers = headers or {}
         self.state = type("State", (), {})()
@@ -85,3 +86,73 @@ def test_step_up_role_enforcement():
         assert exc.status_code == 403
     else:
         raise AssertionError("high-impact actions must retain role authorization")
+
+
+def test_edge_decision_is_required_when_enforcement_is_enabled():
+    from fastapi import HTTPException
+    import edge_security
+    from edge_security import verify_edge_decision
+
+    previous = edge_security.settings.EDGE_ENFORCE_DECISION
+    edge_security.settings.EDGE_ENFORCE_DECISION = True
+    try:
+        try:
+            verify_edge_decision(Request())
+        except HTTPException as exc:
+            assert exc.status_code == 403
+        else:
+            raise AssertionError("edge enforcement must fail closed without a signed decision")
+    finally:
+        edge_security.settings.EDGE_ENFORCE_DECISION = previous
+
+
+def test_signed_edge_decision_is_bound_to_request_and_replay_protected():
+    import base64
+    import json
+    import os
+    import secrets
+    from dataclasses import asdict
+    import edge_security
+    from edge.policy import EdgePolicy
+    from edge_security import verify_edge_decision
+
+    previous_env_secret = os.environ.get("EDGE_SIGNING_SECRET")
+    os.environ["EDGE_SIGNING_SECRET"] = "unit-test-" + secrets.token_hex(32)
+    policy = EdgePolicy()
+    decision = policy.decide(method="GET", path="/api/metrics/overview", client_key="192.0.2.20")
+    payload = asdict(decision)
+    signature = payload.pop("signature")
+    encoded = base64.urlsafe_b64encode(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).decode("ascii").rstrip("=")
+
+    request = Request(
+        path="/api/metrics/overview",
+        headers={
+            "x-aegis-edge-decision": encoded,
+            "x-aegis-edge-signature": signature,
+            "x-aegis-edge-client-ip": "192.0.2.20",
+        },
+    )
+    previous = (
+        edge_security.settings.EDGE_ENFORCE_DECISION,
+        edge_security.settings.EDGE_VERIFY_SECRET,
+        edge_security.settings.EDGE_AUDIENCE,
+    )
+    edge_security.settings.EDGE_ENFORCE_DECISION = True
+    edge_security.settings.EDGE_VERIFY_SECRET = os.environ["EDGE_SIGNING_SECRET"]
+    edge_security.settings.EDGE_AUDIENCE = "aegis-api"
+    try:
+        verify_edge_decision(request)
+        try:
+            verify_edge_decision(request)
+        except Exception as exc:
+            assert getattr(exc, "status_code", None) == 403
+        else:
+            raise AssertionError("a signed edge decision must not be reusable")
+    finally:
+        edge_security.settings.EDGE_ENFORCE_DECISION, edge_security.settings.EDGE_VERIFY_SECRET, edge_security.settings.EDGE_AUDIENCE = previous
+        if previous_env_secret is None:
+            os.environ.pop("EDGE_SIGNING_SECRET", None)
+        else:
+            os.environ["EDGE_SIGNING_SECRET"] = previous_env_secret
