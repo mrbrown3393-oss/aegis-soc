@@ -3,7 +3,7 @@
 > **A sovereign Security Operations Center platform — operated by signal.**
 > Owned by **William Brown**. Ready to sell, rent, or license.
 >
-> **Stack: FastAPI + MongoDB + React (CRA).** This repository contains the
+> **Stack: FastAPI + MongoDB + React + Vite.** This repository contains the
 > production-shaped FastAPI backend described in `SECURITY_DOSSIER.md`.
 > The previous Node/Express build has been replaced.
 
@@ -53,7 +53,7 @@ Aegis SOC is a modular, enterprise cybersecurity platform that unifies threat de
 ## Architecture
 
 ```
-React 19 Frontend (CRA)  --axios, httpOnly JWT cookies-->  FastAPI Backend (/api/*)
+React 19 Frontend (Vite)  --axios, httpOnly JWT cookies-->  FastAPI Backend (/api/*)
                                                               |
                                                               v
                                                          MongoDB
@@ -63,7 +63,7 @@ React 19 Frontend (CRA)  --axios, httpOnly JWT cookies-->  FastAPI Backend (/api
                                                     login_attempts (TTL)
 ```
 
-- **Auth**: Access JWT (12h) + refresh JWT (7d) in `secure`, `httpOnly`, `samesite=none` cookies.
+- **Auth**: Access JWT (15m) + refresh JWT (7d) in `secure`, `httpOnly`, SameSite cookies.
 - **Password hashing**: `bcrypt` (cost 12).
 - **Brute-force protection**: 5 failed attempts per `{ip}:{email}` triggers a 15-min lockout.
 - **Audit**: Mutating actions are appended to `audit_logs` with actor, IP, resource, and tenant.
@@ -79,9 +79,8 @@ React 19 Frontend (CRA)  --axios, httpOnly JWT cookies-->  FastAPI Backend (/api
 - **Starlette CORS** — origin-whitelisted, credentials-enabled
 
 ### Frontend
-- **React 19** · **React Router 7** · **CRACO**
-- **Tailwind CSS 3.4** · **Shadcn UI** (Radix primitives)
-- **Recharts 3** · **framer-motion 11** · **lucide-react** · **sonner** · **axios**
+- **React 19** · **React Router 7** · **Vite 6** · **TypeScript 5.7**
+- **Tailwind CSS 3.4** · **lucide-react** · **date-fns** · **Recharts**
 
 ### Typography
 - **Chivo** — headings · **IBM Plex Sans** — body · **IBM Plex Mono** — data/logs
@@ -167,9 +166,9 @@ All endpoints prefixed `/api`.
 
 ## Authentication & RBAC
 
-- **Transport**: JWT in `httpOnly`, `secure`, `samesite=none` cookies.
+- **Transport**: JWT in `httpOnly`, `secure`, SameSite cookies.
 - **CSRF defense**: state-changing requests carrying Aegis auth cookies are origin-checked against the configured frontend/CORS origins.
-- **Lifetimes**: Access 12h · Refresh 7d.
+- **Lifetimes**: Access 15m · Refresh 7d.
 - **Hashing**: bcrypt cost 12, per-password salt.
 - **Lockout**: 5 failed attempts → 15-min lockout per `{ip}:{email}`.
 - **Audit**: Every login/logout/mutation logs to `audit_logs`.
