@@ -16,12 +16,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
       - run: pip install -r backend/requirements.txt
       - name: Start API
         run: |
           cd backend
-          export MONGO_URL=mongodb://localhost:27017 DB_NAME=aegis_test JWT_SECRET=test-secret-not-for-production ADMIN_EMAIL=admin@test.io ADMIN_PASSWORD=TestPass123! ANALYST_EMAIL=analyst@test.io ANALYST_PASSWORD=TestPass123! FRONTEND_URL=http://localhost:3000 CORS_ORIGINS=http://localhost:3000 MONGO_TLS=false
+          export MONGO_URL=mongodb://localhost:27017 DB_NAME=aegis_test JWT_SECRET=test-secret-not-for-production ADMIN_EMAIL=admin@test.io ADMIN_PASSWORD=TestPass123! ANALYST_EMAIL=analyst@test.io ANALYST_PASSWORD=TestPass123! FRONTEND_URL=http://localhost:3000 CORS_ORIGINS=http://localhost:3000 MONGO_TLS=false MFA_REQUIRED=true AEGIS_ENV=test
           uvicorn server:app --host 127.0.0.1 --port 8001 &
           sleep 5
       - name: Backend tests
@@ -29,5 +29,44 @@ jobs:
       - name: Smoke test
         run: |
           curl -sf http://127.0.0.1:8001/api/ | grep -q ok
-          curl -sf -c /tmp/c.txt -X POST http://127.0.0.1:8001/api/auth/login -H 'Content-Type: application/json' -d '{"email":"admin@test.io","password":"TestPass123!"}' | grep -q Logged
-          curl -sf -b /tmp/c.txt 'http://127.0.0.1:8001/api/metrics/overview?tenant=all' | grep -q total_threats
+          curl -sf -c /tmp/c.txt -X POST http://127.0.0.1:8001/api/auth/login -H 'Content-Type: application/json' -d '{"email":"admin@test.io","password":"TestPass123!"}' | tee /tmp/login.json | grep -q '"mfaRequired":true'
+          python - <<'PY'
+          import base64, hashlib, hmac, struct, time
+          import requests
+          s = requests.Session()
+          login = requests.post(
+              "http://127.0.0.1:8001/api/auth/login",
+              json={"email":"admin@test.io","password":"TestPass123!"},
+          )
+          assert login.status_code == 200 and login.json()["mfaRequired"] is True
+          setup = s.get("http://127.0.0.1:8001/api/auth/mfa/setup", cookies=login.cookies)
+          assert setup.status_code == 200
+          secret = setup.json()["secret"]
+          key = base64.b32decode(secret + "=" * ((8 - len(secret) % 8) % 8), casefold=True)
+          counter = int(time.time() // 30)
+          digest = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
+          offset = digest[-1] & 0x0F
+          code = f"{(struct.unpack('>I', digest[offset:offset+4])[0] & 0x7fffffff) % 1000000:06d}"
+          verify = s.post("http://127.0.0.1:8001/api/auth/mfa/verify", json={"code":code}, cookies=login.cookies)
+          assert verify.status_code == 200, verify.text
+          cookies = s.cookies
+          metrics = s.get("http://127.0.0.1:8001/api/metrics/overview?tenant=all", cookies=cookies)
+          assert metrics.status_code == 200 and "total_threats" in metrics.json()
+          print("Authenticated MFA smoke test passed")
+          PY
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: client/package.json
+      - name: Install client dependencies
+        working-directory: client
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Build client
+        working-directory: client
+        run: npm run build
