@@ -260,7 +260,7 @@ def test_telemetry_fusion_requires_operator_role():
     checker = checkers[0]
     assert checker.__closure__ is not None
     assert any(
-        cell.cell_contents == ("owner", "admin", "analyst")
+        cell.cell_contents == ("owner", "admin", "operator")
         for cell in checker.__closure__
     )
 
