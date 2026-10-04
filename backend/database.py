@@ -1,7 +1,7 @@
-"""MongoDB connection for Aegis SOC."""
+"""MongoDB connection for Aegis SOC using the native PyMongo Async API."""
 from __future__ import annotations
 
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 
 from config import settings
 
@@ -13,5 +13,5 @@ if settings.MONGO_TLS_CA_FILE and settings.MONGO_TLS:
 if settings.MONGO_TLS_CERT_KEY_FILE and settings.MONGO_TLS:
     mongo_kwargs["tlsCertificateKeyFile"] = settings.MONGO_TLS_CERT_KEY_FILE
 
-client = AsyncIOMotorClient(settings.MONGO_URL, **mongo_kwargs)
+client = AsyncMongoClient(settings.MONGO_URL, **mongo_kwargs)
 db = client[settings.DB_NAME]

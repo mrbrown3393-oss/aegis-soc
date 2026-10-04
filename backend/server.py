@@ -32,7 +32,7 @@ from security_hardening import SecurityHeadersMiddleware
 from seed import run_startup
 
 # Re-export symbols that sso.py / anomaly.py currently import from server
-from database import db  # noqa: F401
+from database import client, db  # noqa: F401
 from deps import (  # noqa: F401
     get_current_user,
     require_role,
@@ -85,6 +85,11 @@ app.add_middleware(
 @app.on_event("startup")
 async def on_startup():
     await run_startup()
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    await client.close()
 
 
 # ── Routers ─────────────────────────────────────────────────────────────────

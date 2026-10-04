@@ -1,6 +1,7 @@
 """Startup indexes and idempotent demo-data seeding."""
 from __future__ import annotations
 
+import random
 import secrets
 from datetime import datetime, timezone, timedelta
 
@@ -71,7 +72,7 @@ async def seed_demo_data() -> None:
             "description": "Demo telemetry for Aegis SOC operator training.",
             "source_ip": secrets.choice(sources),
             "geo": secrets.choice(geos),
-            "confidence": round(secrets.uniform(0.4, 0.99), 2),
+            "confidence": round(random.uniform(0.4, 0.99), 2),
             "affected_asset": f"asset-{(i % 60)+1:03d}",
             "timestamp": (now - timedelta(days=secrets.randbelow(14), hours=secrets.randbelow(24))).isoformat(),
         })
@@ -85,7 +86,7 @@ async def seed_demo_data() -> None:
             "tenant": tenants[i % 3],
             "cve": cve,
             "title": f"Demo vulnerability {cve}",
-            "cvss": round(secrets.uniform(4.0, 9.8), 1),
+            "cvss": round(random.uniform(4.0, 9.8), 1),
             "status": secrets.choice(["open", "open", "patched"]),
             "asset": f"asset-{(i % 60)+1:03d}",
             "discovered_at": (now - timedelta(days=secrets.randbelow(30))).isoformat(),
@@ -119,7 +120,7 @@ async def seed_demo_data() -> None:
             "type": secrets.choice(asset_types),
             "ip": f"10.{secrets.randbelow(255)}.{secrets.randbelow(255)}.{secrets.randbelow(255)}",
             "os": secrets.choice(["Windows 11", "Ubuntu 22.04", "RHEL 9", "macOS Sonoma"]),
-            "risk_score": round(secrets.uniform(1.0, 9.5), 1),
+            "risk_score": round(random.uniform(1.0, 9.5), 1),
             "last_seen": (now - timedelta(minutes=secrets.randbelow(1440))).isoformat(),
         })
     await db.assets.insert_many(assets)
@@ -132,7 +133,7 @@ async def seed_demo_data() -> None:
                 "id": secrets.token_hex(8),
                 "tenant": t,
                 "framework": fw,
-                "score": round(secrets.uniform(55.0, 95.0), 1),
+                "score": round(random.uniform(55.0, 95.0), 1),
                 "controls_passing": secrets.randbelow(80) + 20,
                 "controls_total": 100,
                 "last_assessed": (now - timedelta(days=secrets.randbelow(7))).isoformat(),
@@ -142,6 +143,7 @@ async def seed_demo_data() -> None:
     audits = []
     for i in range(80):
         audits.append({
+            "id": secrets.token_hex(8),
             "actor": secrets.choice([settings.ADMIN_EMAIL, settings.ANALYST_EMAIL, "system"]),
             "action": secrets.choice(["login", "logout", "incident_update", "vuln_patch", "user_invite", "threat_view"]),
             "resource": f"resource-{secrets.randbelow(50)}",

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Optional
+import secrets
 
 import jwt
 from fastapi import Depends, HTTPException, Request, status
@@ -63,6 +64,7 @@ async def write_audit(
     tenant: str = "",
 ) -> None:
     await db.audit_logs.insert_one({
+        "id": secrets.token_hex(8),
         "actor": actor,
         "action": action,
         "resource": resource,

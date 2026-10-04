@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 Tenant = Literal["government", "private", "saas"]
-Role = Literal["owner", "admin", "analyst", "viewer"]
+Role = Literal["owner", "admin", "operator", "analyst", "viewer"]
 IncidentStatus = Literal["new", "investigating", "contained", "resolved"]
 
 

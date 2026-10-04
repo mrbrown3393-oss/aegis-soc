@@ -13,16 +13,16 @@ jobs:
         image: mongo:6
         ports: ["27017:27017"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - run: pip install -r backend/requirements.txt
       - name: Start API
         run: |
           cd backend
-          export MONGO_URL=mongodb://localhost:27017 DB_NAME=aegis_test JWT_SECRET=test-secret-not-for-production ADMIN_EMAIL=admin@test.io ADMIN_PASSWORD=TestPass123! ANALYST_EMAIL=analyst@test.io ANALYST_PASSWORD=TestPass123! FRONTEND_URL=http://localhost:3000 CORS_ORIGINS=http://localhost:3000 MONGO_TLS=false MFA_REQUIRED=true AEGIS_ENV=test
-          uvicorn server:app --host 127.0.0.1 --port 8001 &
+          export MONGO_URL=mongodb://localhost:27017 DB_NAME=aegis_test JWT_SECRET=test-secret-not-for-production ADMIN_EMAIL=admin@test.io ADMIN_PASSWORD=TestPass123! ANALYST_EMAIL=analyst@test.io ANALYST_PASSWORD=TestPass123! FRONTEND_URL=http://localhost:3000 CORS_ORIGINS=http://localhost:3000 MONGO_TLS=false MFA_REQUIRED=true MFA_MASTER_SECRET=test-mfa-master-secret-0123456789abcdef AEGIS_ENV=test
+          uvicorn server:app --host 127.0.0.1 --port 8001 > /tmp/uvicorn.log 2>&1 &
           sleep 5
       - name: Backend tests
         working-directory: backend
@@ -39,9 +39,9 @@ jobs:
               "http://127.0.0.1:8001/api/auth/login",
               json={"email":"admin@test.io","password":"TestPass123!"},
           )
-          assert login.status_code == 200 and login.json()["mfaRequired"] is True
+          assert login.status_code == 200 and login.json()["mfaRequired"] is True, login.text
           setup = s.get("http://127.0.0.1:8001/api/auth/mfa/setup")
-          assert setup.status_code == 200
+          assert setup.status_code == 200, setup.text
           secret = setup.json()["secret"]
           key = base64.b32decode(secret + "=" * ((8 - len(secret) % 8) % 8), casefold=True)
           counter = int(time.time() // 30)
@@ -51,15 +51,20 @@ jobs:
           verify = s.post("http://127.0.0.1:8001/api/auth/mfa/verify", json={"code":code})
           assert verify.status_code == 200, verify.text
           metrics = s.get("http://127.0.0.1:8001/api/metrics/overview?tenant=all")
-          assert metrics.status_code == 200 and "total_threats" in metrics.json()
+          assert metrics.status_code == 200 and "total_threats" in metrics.json(), metrics.text
           print("Authenticated MFA smoke test passed")
           PY
+      - name: Dump API log on smoke failure
+        if: failure()
+        run: |
+          echo "===== uvicorn log ====="
+          cat /tmp/uvicorn.log || true
 
   frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: npm
