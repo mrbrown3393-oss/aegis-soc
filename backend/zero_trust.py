@@ -24,12 +24,16 @@ PUBLIC_PATHS = {
 
 
 def request_id(request: Request) -> str:
-    current = getattr(request.state, "aegis_request_id", None)
+    """Return a bounded correlation ID while tolerating lightweight request stubs in tests."""
+    state = getattr(request, "state", None)
+    current = getattr(state, "aegis_request_id", None)
     if current:
         return current
-    existing = request.headers.get("x-request-id", "").strip()
+    headers = getattr(request, "headers", {})
+    existing = headers.get("x-request-id", "").strip()
     value = existing if existing and len(existing) <= 128 else secrets.token_urlsafe(16)
-    request.state.aegis_request_id = value
+    if state is not None:
+        state.aegis_request_id = value
     return value
 
 
