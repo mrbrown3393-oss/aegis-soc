@@ -66,6 +66,11 @@ async def delete_user(
         raise HTTPException(status_code=404, detail="User not found")
     if target["role"] == "owner":
         raise HTTPException(status_code=400, detail="Cannot remove the owner")
-    await db.users.delete_one({"id": user_id})
+    delete_filter = {"id": user_id}
+    if user["role"] != "owner":
+        delete_filter["tenant"] = user["tenant"]
+    result = await db.users.delete_one(delete_filter)
+    if getattr(result, "deleted_count", 0) != 1:
+        raise HTTPException(status_code=404, detail="User not found")
     await write_audit(user["email"], "user_delete", target["email"], request, target["tenant"])
     return {"message": "User removed"}

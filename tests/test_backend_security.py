@@ -590,3 +590,49 @@ def test_runtime_audit_records_have_unique_ids(monkeypatch):
     ids = [record["id"] for record in fake.audit_logs.records]
     assert all(ids)
     assert len(ids) == len(set(ids))
+
+
+def test_user_delete_is_atomic_and_tenant_scoped(monkeypatch):
+    import asyncio
+    from routers import users
+
+    class Result:
+        deleted_count = 1
+
+    class Collection:
+        def __init__(self):
+            self.find_filters = []
+            self.delete_filters = []
+
+        async def find_one(self, filt):
+            self.find_filters.append(filt.copy())
+            return {"id": filt["id"], "email": "target@example.com", "role": "viewer", "tenant": "government"}
+
+        async def delete_one(self, filt):
+            self.delete_filters.append(filt.copy())
+            return Result()
+
+    class FakeDB:
+        def __init__(self):
+            self.users = Collection()
+
+    fake = FakeDB()
+    monkeypatch.setattr(users, "db", fake)
+    monkeypatch.setattr(users, "write_audit", lambda *args, **kwargs: asyncio.sleep(0))
+
+    class Request:
+        class Client:
+            host = "127.0.0.1"
+        client = Client()
+
+    async def run():
+        await users.delete_user(
+            "target-id",
+            Request(),
+            {"role": "admin", "tenant": "government", "email": "admin@example.com"},
+        )
+
+    asyncio.run(run())
+
+    assert fake.users.find_filters == [{"id": "target-id", "tenant": "government"}]
+    assert fake.users.delete_filters == [{"id": "target-id", "tenant": "government"}]
