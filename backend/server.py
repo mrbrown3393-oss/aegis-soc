@@ -28,6 +28,7 @@ import hashlib
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Literal, Optional
+from urllib.parse import urlparse
 
 import bcrypt
 import jwt
@@ -120,8 +121,14 @@ async def csrf_origin_guard(request: Request, call_next):
     ):
         origin = request.headers.get("origin")
         referer = request.headers.get("referer")
-        source = origin or (referer.rsplit("/", 3)[0] if referer else None)
-        if source and source.rstrip("/") not in allowed_csrf_origins():
+        if origin:
+            source = origin.rstrip("/")
+        elif referer:
+            parsed = urlparse(referer)
+            source = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+        else:
+            source = None
+        if source and source not in allowed_csrf_origins():
             return JSONResponse(status_code=403, content={"detail": "Cross-origin request blocked"})
     return await call_next(request)
 
