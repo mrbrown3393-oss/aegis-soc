@@ -565,7 +565,10 @@ def test_runtime_audit_records_have_unique_ids(monkeypatch):
     monkeypatch.setattr("deps.db", fake)
 
     class Request:
-        pass
+        class Client:
+            host = "127.0.0.1"
+
+        client = Client()
 
     async def run():
         await write_audit("admin@example.com", "login", "auth", Request(), "government")
