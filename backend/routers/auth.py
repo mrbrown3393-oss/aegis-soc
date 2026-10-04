@@ -7,6 +7,8 @@ from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
+from session_security import create_bound_auth_session
+
 from auth_helpers import (
     hash_password,
     verify_password,
@@ -25,7 +27,6 @@ from auth_helpers import (
     create_access_token,
     create_refresh_token,
     decode_jwt,
-    create_auth_session,
     revoke_session,
     revoke_user_sessions,
     set_auth_cookies,
@@ -102,7 +103,7 @@ async def login(body: LoginRequest, request: Request, response: Response):
             "role": user["role"],
             "tenant": user["tenant"],
         }
-    session_id, refresh_jti = await create_auth_session(user["id"])
+    session_id, refresh_jti = await create_bound_auth_session(user["id"], request)
     access = create_access_token(user["id"], user["email"], user["role"], user["tenant"], session_id)
     refresh = create_refresh_token(user["id"], session_id, refresh_jti)
     set_auth_cookies(response, access, refresh)
@@ -180,7 +181,7 @@ async def mfa_verify(body: dict, request: Request, response: Response):
             {"$set": {"mfaEnrolledAt": datetime.now(timezone.utc).isoformat()}},
         )
     clear_mfa_pending_cookie(response)
-    session_id, refresh_jti = await create_auth_session(user["id"])
+    session_id, refresh_jti = await create_bound_auth_session(user["id"], request)
     access = create_access_token(user["id"], user["email"], user["role"], user["tenant"], session_id)
     refresh = create_refresh_token(user["id"], session_id, refresh_jti)
     set_auth_cookies(response, access, refresh)
