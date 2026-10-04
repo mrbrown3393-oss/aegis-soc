@@ -52,10 +52,10 @@ os.environ.update({
 
 
 def test_backend_imports_and_security_routes():
-    # Validate the actual router definitions directly. The CI test process can
-    # have unrelated top-level modules named "server"/"routers" preloaded, so
-    # asserting the composed FastAPI app here makes the test harness itself
-    # vulnerable to module collisions rather than testing Aegis routes.
+    # Load the complete Aegis application first. anomaly.py imports selected
+    # symbols from server.py, so importing anomaly directly would create a
+    # server -> anomaly -> server circular import during a cold test process.
+    _aegis_app()
     from anomaly import anomaly_router
     from routers.auth import router as auth_router
     from sso import sso_router
