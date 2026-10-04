@@ -1,7 +1,8 @@
 import asyncio
 from datetime import datetime, timezone, timedelta
 
-from deps import tenant_filter\nfrom step_up import STEP_UP_MINUTES, create_step_up_token, enforce_step_up_role, validate_step_up_claims
+from deps import tenant_filter
+from step_up import STEP_UP_MINUTES, create_step_up_token, enforce_step_up_role, validate_step_up_claims
 from zero_trust import device_fingerprint, enforce_protected_path
 
 
@@ -49,7 +50,9 @@ def test_owner_cross_tenant_scope_is_explicit():
     user = {"role": "owner", "tenant": "government"}
     assert tenant_filter(user, "private") == {"tenant": "private"}
     assert tenant_filter(user, "all") == {}
-\n\ndef test_step_up_claims_reject_session_mismatch():
+
+
+def test_step_up_claims_reject_session_mismatch():
     from fastapi import HTTPException
     payload = {"type": "step_up", "sid": "session-a", "fp": "fp-a"}
     access = {"type": "access", "sid": "session-b"}
