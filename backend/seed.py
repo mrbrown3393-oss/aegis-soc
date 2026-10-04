@@ -143,6 +143,7 @@ async def seed_demo_data() -> None:
     audits = []
     for i in range(80):
         audits.append({
+            "id": secrets.token_hex(8),
             "actor": secrets.choice([settings.ADMIN_EMAIL, settings.ANALYST_EMAIL, "system"]),
             "action": secrets.choice(["login", "logout", "incident_update", "vuln_patch", "user_invite", "threat_view"]),
             "resource": f"resource-{secrets.randbelow(50)}",
