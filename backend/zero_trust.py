@@ -10,7 +10,6 @@ from starlette.responses import JSONResponse
 
 from config import settings
 
-
 PUBLIC_PATHS = {
     "/",
     "/api/",
@@ -25,10 +24,13 @@ PUBLIC_PATHS = {
 
 
 def request_id(request: Request) -> str:
+    current = getattr(request.state, "aegis_request_id", None)
+    if current:
+        return current
     existing = request.headers.get("x-request-id", "").strip()
-    if existing and len(existing) <= 128:
-        return existing
-    return secrets.token_urlsafe(16)
+    value = existing if existing and len(existing) <= 128 else secrets.token_urlsafe(16)
+    request.state.aegis_request_id = value
+    return value
 
 
 def device_fingerprint(request: Request) -> str:
@@ -50,29 +52,25 @@ def enforce_protected_path(request: Request) -> None:
     if path.startswith("/api/auth/sso/"):
         return
     if path.startswith("/api/") and path not in PUBLIC_PATHS and not request.cookies.get("access_token"):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-        )
+        raise HTTPException(status_code=401, detail="Authentication required")
 
 
 def require_mfa_strength(auth_strength: str | None) -> None:
-    """Production protected actions must originate from an MFA-authenticated session."""
     if settings.MFA_REQUIRED and auth_strength != "mfa":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="MFA-authenticated session required",
-        )
+        raise HTTPException(status_code=403, detail="MFA-authenticated session required")
 
 
 class ZeroTrustMiddleware(BaseHTTPMiddleware):
     """Global fail-closed guard for API endpoints."""
 
     async def dispatch(self, request: Request, call_next):
+        request_id(request)
         try:
             enforce_protected_path(request)
         except HTTPException as exc:
-            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+            response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+            response.headers["X-Request-ID"] = request.state.aegis_request_id
+            return response
         response = await call_next(request)
-        response.headers["X-Request-ID"] = request_id(request)
+        response.headers["X-Request-ID"] = request.state.aegis_request_id
         return response
