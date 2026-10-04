@@ -120,8 +120,39 @@ def test_totp_accepts_current_and_adjacent_time_step(monkeypatch):
     secret = _mfa_secret("test-user")
     code = _totp(secret, 1_000_000)
     assert _verify_totp(secret, code)
-    assert _totp(secret, 1_000_030) == code
+    assert _verify_totp(secret, _totp(secret, 1_000_030))
     assert not _verify_totp(secret, "000000")
+
+
+
+def test_tenant_filter_hard_scopes_admin_and_nonprivileged_users():
+    from server import tenant_filter
+
+    admin = {"role": "admin", "tenant": "government"}
+    analyst = {"role": "analyst", "tenant": "private"}
+    owner = {"role": "owner", "tenant": "saas"}
+
+    assert tenant_filter(admin, "private") == {"tenant": "government"}
+    assert tenant_filter(analyst, "government") == {"tenant": "private"}
+    assert tenant_filter(owner, "government") == {"tenant": "government"}
+
+
+def test_password_policy_enforces_minimum_and_bcrypt_byte_limit():
+    from server import RegisterRequest, PasswordResetConfirm, UserInvite
+    import pytest
+
+    with pytest.raises(ValueError):
+        RegisterRequest(email="a@example.com", password="short", name="A")
+
+    long_utf8 = "é" * 40
+    with pytest.raises(ValueError):
+        RegisterRequest(email="a@example.com", password=long_utf8, name="A")
+
+    with pytest.raises(ValueError):
+        PasswordResetConfirm(token="x", new_password="short")
+
+    with pytest.raises(ValueError):
+        UserInvite(email="b@example.com", name="B", role="viewer", tenant="private", password="short")
 
 
 def test_production_requires_mfa_master_secret(monkeypatch):
