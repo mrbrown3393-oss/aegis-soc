@@ -270,4 +270,4 @@ async def record_mfa_failure(ip: str, user_id: str) -> None:
 
 
 async def clear_mfa_failures(ip: str, user_id: str) -> None:
-    await db.login_attempts.delete_one({"key": f"mfa:{ip}:{user_id}")
+    await db.login_attempts.delete_one({"key": f"mfa:{ip}:{user_id}"})
