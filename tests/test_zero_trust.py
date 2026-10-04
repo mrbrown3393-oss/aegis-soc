@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime, timezone, timedelta
 
-from deps import tenant_filter
+from deps import tenant_filter\nfrom step_up import STEP_UP_MINUTES, create_step_up_token, enforce_step_up_role, validate_step_up_claims
 from zero_trust import device_fingerprint, enforce_protected_path
 
 
@@ -49,3 +49,36 @@ def test_owner_cross_tenant_scope_is_explicit():
     user = {"role": "owner", "tenant": "government"}
     assert tenant_filter(user, "private") == {"tenant": "private"}
     assert tenant_filter(user, "all") == {}
+\n\ndef test_step_up_claims_reject_session_mismatch():
+    from fastapi import HTTPException
+    payload = {"type": "step_up", "sid": "session-a", "fp": "fp-a"}
+    access = {"type": "access", "sid": "session-b"}
+    try:
+        validate_step_up_claims(payload, access, "fp-a")
+    except HTTPException as exc:
+        assert exc.status_code == 401
+    else:
+        raise AssertionError("step-up token must be bound to the access session")
+
+
+def test_step_up_claims_reject_device_change():
+    from fastapi import HTTPException
+    payload = {"type": "step_up", "sid": "session-a", "fp": "fp-a"}
+    access = {"type": "access", "sid": "session-a"}
+    try:
+        validate_step_up_claims(payload, access, "fp-b")
+    except HTTPException as exc:
+        assert exc.status_code == 401
+    else:
+        raise AssertionError("step-up token must be bound to the validated device context")
+
+
+def test_step_up_role_enforcement():
+    from fastapi import HTTPException
+    enforce_step_up_role({"role": "admin"}, {"owner", "admin"})
+    try:
+        enforce_step_up_role({"role": "viewer"}, {"owner", "admin"})
+    except HTTPException as exc:
+        assert exc.status_code == 403
+    else:
+        raise AssertionError("high-impact actions must retain role authorization")

@@ -7,8 +7,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from database import db
-from deps import get_current_user, require_role, tenant_filter, write_audit
-from step_up import require_step_up
+from deps import get_current_user, tenant_filter, write_audit
+from step_up import require_step_up_role
 from models import IncidentUpdate
 
 router = APIRouter(tags=["incidents"])
@@ -25,7 +25,7 @@ async def update_incident(
     incident_id: str,
     body: IncidentUpdate,
     request: Request,
-    user: dict = Depends(require_step_up),
+    user: dict = Depends(require_step_up_role("owner", "admin", "analyst")),
 ):
     filt = {"id": incident_id, **tenant_filter(user)}
     result = await db.incidents.update_one(
