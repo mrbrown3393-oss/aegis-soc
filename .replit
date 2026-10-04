@@ -1,19 +1,15 @@
-modules = ["nodejs-20"]
-run = "npm run dev"
-hidden = [".config", ".git", "node_modules", "client/node_modules", "client/dist"]
+modules = ["python-3.11"]
+run = "cd backend && uvicorn server:app --host 0.0.0.0 --port 8001"
+hidden = [".config", ".git", "__pycache__", ".pytest_cache"]
 
 [nix]
 channel = "stable-24_05"
 
 [deployment]
 deploymentTarget = "autoscale"
-build = ["npm", "run", "build"]
-run = ["npm", "run", "start"]
+build = ["sh", "-c", "cd backend && pip install -r requirements.txt"]
+run = ["sh", "-c", "cd backend && uvicorn server:app --host 0.0.0.0 --port 8001"]
 
 [[ports]]
-localPort = 3000
+localPort = 8001
 externalPort = 80
-
-[[ports]]
-localPort = 5173
-externalPort = 5173
