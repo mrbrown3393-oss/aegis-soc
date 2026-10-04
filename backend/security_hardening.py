@@ -35,9 +35,18 @@ def forwarded_client_ip(request: Request, trusted_proxy_ips: str) -> str:
     if any(peer_ip in network for network in trusted):
         forwarded = request.headers.get("x-forwarded-for", "")
         if forwarded:
-            candidate = forwarded.split(",")[0].strip()
-            try:
-                ip_address(candidate)
-                return candidate
-            except ValueError: pass
+            # Walk the proxy chain from the immediate peer toward the client.
+            # The first address that is not itself in a trusted proxy network is
+            # the client address. Taking the left-most value is spoofable when
+            # an untrusted client can inject an extra X-Forwarded-For entry.
+            chain = [part.strip() for part in forwarded.split(",") if part.strip()]
+            for candidate in reversed(chain):
+                try:
+                    candidate_ip = ip_address(candidate)
+                except ValueError:
+                    continue
+                if not any(candidate_ip in network for network in trusted):
+                    return candidate
+            # If every forwarded hop is trusted, retain the peer rather than
+            # trusting an ambiguous client-supplied chain.
     return peer
