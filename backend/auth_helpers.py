@@ -11,6 +11,7 @@ from typing import Optional
 
 import bcrypt
 import jwt
+from pymongo import ReturnDocument
 from fastapi import HTTPException, Request, Response, status
 
 from config import (
