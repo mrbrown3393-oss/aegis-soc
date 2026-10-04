@@ -20,8 +20,13 @@ export default function Login() {
       const complete = await login(email, password);
       if (complete) navigate('/');
       else {
-        const setup = await authApi.mfaSetup();
-        setSetupSecret(setup.secret);
+        try {
+          const setup = await authApi.mfaSetup();
+          setSetupSecret(setup.secret);
+        } catch (setupErr) {
+          // Enrolled users should never be shown their MFA secret again.
+          if (!(setupErr instanceof Error && /already enrolled/i.test(setupErr.message))) throw setupErr;
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
@@ -54,7 +59,7 @@ export default function Login() {
             <button type="submit" className="btn-primary w-full py-2.5" disabled={loading}>{loading ? 'Checking…' : 'Continue'}</button>
           </> : <>
             <div className="text-sm text-slate-300">Enter the 6-digit code from your authenticator app.</div>
-            {setupSecret && <div className="rounded-lg bg-slate-900/60 border border-slate-700 p-3 text-xs text-slate-300">First-time setup secret: <code className="break-all">{setupSecret}</code><div className="mt-1 text-slate-500">Add this secret to a TOTP authenticator, then enter the current code.</div></div>}
+            {setupSecret && <div className="rounded-lg bg-slate-900/60 border border-slate-700 p-3 text-xs text-slate-300">First-time enrollment secret: <code className="break-all">{setupSecret}</code><div className="mt-1 text-slate-500">Add this secret to a TOTP authenticator, then enter the current code.</div></div>}
             <input inputMode="numeric" pattern="\d{6}" maxLength={6} className="input tracking-[0.5em] text-center" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))} required autoComplete="one-time-code" aria-label="MFA code" />
             <button type="submit" className="btn-primary w-full py-2.5" disabled={loading}>{loading ? 'Verifying…' : 'Verify MFA'}</button>
           </>}
