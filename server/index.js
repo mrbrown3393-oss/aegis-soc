@@ -115,9 +115,13 @@ wss.on('connection', (ws) => {
   ws.on('error', () => clients.delete(ws));
 });
 
-function broadcast(msg) {
+function broadcast(msg, tenant = null) {
   const data = JSON.stringify(msg);
-  for (const c of clients) if (c.readyState === 1) c.send(data);
+  for (const c of clients) {
+    if (c.readyState !== 1 || !c.user) continue;
+    if (tenant && c.user.role !== 'admin' && c.user.role !== 'owner' && c.user.tenant !== tenant) continue;
+    c.send(data);
+  }
 }
 
 setInterval(() => {
@@ -155,7 +159,7 @@ setInterval(() => {
   };
   store.alerts.unshift(alert);
   if (store.alerts.length > 100) store.alerts.pop();
-  broadcast({ type: 'alert', data: alert });
+  broadcast({ type: 'alert', data: alert }, alert.tenant);
 }, 25000 + Math.random() * 20000);
 
 server.listen(config.PORT, '0.0.0.0', () => {
