@@ -457,6 +457,27 @@ async def record_password_reset_attempt(ip: str, email: str) -> None:
         update["$set"]["locked_until"] = now + timedelta(minutes=LOCKOUT_MINUTES)
     await db.login_attempts.update_one({"key": key}, update, upsert=True)
 
+async def check_mfa_lockout(ip: str, user_id: str) -> None:
+    key = f"mfa:{ip}:{user_id}"
+    attempt = await db.login_attempts.find_one({"key": key})
+    if attempt and attempt.get("locked_until") and datetime.now(timezone.utc) < attempt["locked_until"]:
+        raise HTTPException(status_code=429, detail="MFA temporarily locked. Try again later")
+
+
+async def record_mfa_failure(ip: str, user_id: str) -> None:
+    key = f"mfa:{ip}:{user_id}"
+    now = datetime.now(timezone.utc)
+    attempt = await db.login_attempts.find_one({"key": key})
+    count = (attempt.get("count", 0) if attempt else 0) + 1
+    update = {"$set": {"count": count, "last_attempt": now}}
+    if count >= LOCKOUT_THRESHOLD:
+        update["$set"]["locked_until"] = now + timedelta(minutes=LOCKOUT_MINUTES)
+    await db.login_attempts.update_one({"key": key}, update, upsert=True)
+
+
+async def clear_mfa_failures(ip: str, user_id: str) -> None:
+    await db.login_attempts.delete_one({"key": f"mfa:{ip}:{user_id}"})
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Pydantic models
@@ -728,11 +749,16 @@ async def mfa_verify(body: dict, request: Request, response: Response):
     user = await db.users.find_one({"id": payload["sub"]})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid MFA session")
+    ip = forwarded_client_ip(request, settings.TRUSTED_PROXY_IPS)
+    await check_mfa_lockout(ip, user["id"])
     if not _verify_totp(_mfa_secret(user["id"]), code):
+        await record_mfa_failure(ip, user["id"])
         raise HTTPException(status_code=401, detail="Invalid MFA code")
+    await clear_mfa_failures(ip, user["id"])
     await db.users.update_one({"id": user["id"]}, {"$set": {"mfaEnrolledAt": user.get("mfaEnrolledAt") or datetime.now(timezone.utc).isoformat()}})
-    access = create_access_token(user["id"], user["email"], user["role"], user["tenant"])
-    refresh = create_refresh_token(user["id"])
+    session_id, refresh_jti = await create_auth_session(user["id"])
+    access = create_access_token(user["id"], user["email"], user["role"], user["tenant"], session_id)
+    refresh = create_refresh_token(user["id"], session_id, refresh_jti)
     set_auth_cookies(response, access, refresh)
     _clear_mfa_pending_cookie(response)
     await write_audit(user["email"], "login", "auth", request, user["tenant"])
