@@ -41,8 +41,6 @@ async def get_current_user(request: Request) -> dict:
     if not session:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session revoked or expired")
 
-    # Bind the session to the browser/device context. Existing sessions are
-    # enrolled on first use; subsequent context changes fail closed.
     fingerprint = device_fingerprint(request)
     stored_fingerprint = session.get("device_fingerprint")
     if stored_fingerprint:
@@ -76,13 +74,11 @@ def require_role(*roles: str):
 
 
 def tenant_filter(user: dict, requested: Optional[str] = None) -> dict:
-    """Default-deny tenant scope; cross-tenant access must be explicitly requested."""
+    """Tenant isolation. Only the owner may cross tenant boundaries."""
     if user["role"] == "owner":
-        if requested == "all":
-            return {}
-        # Owners operate within their current tenant unless they explicitly
-        # select another tenant. This prevents accidental portfolio-wide reads.
-        return {"tenant": requested or user["tenant"]}
+        if requested and requested != "all":
+            return {"tenant": requested}
+        return {}
     return {"tenant": user["tenant"]}
 
 
