@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from auth_helpers import hash_password
 from database import db
 from deps import require_role, tenant_filter, write_audit
+from step_up import require_step_up_role
 from models import UserInvite
 
 router = APIRouter(tags=["users"])
@@ -32,7 +33,7 @@ async def list_users(user: dict = Depends(require_role("owner", "admin"))):
 async def invite_user(
     body: UserInvite,
     request: Request,
-    user: dict = Depends(require_role("owner", "admin")),
+    user: dict = Depends(require_step_up_role("owner", "admin")),
 ):
     validate_invite_authorization(user, body)
     if await db.users.find_one({"email": body.email}):
