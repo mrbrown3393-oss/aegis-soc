@@ -1,6 +1,7 @@
 """Overview metrics endpoints."""
 from __future__ import annotations
 
+from collections import Counter
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -19,31 +20,36 @@ async def metrics_overview(tenant: Optional[str] = None, user: dict = Depends(ge
     open_incidents = await db.incidents.count_documents({**filt, "status": {"$ne": "resolved"}})
     critical = await db.threats.count_documents({**filt, "severity": "critical"})
     high = await db.threats.count_documents({**filt, "severity": "high"})
+
     since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
-    trend = await db.threats.aggregate([
-        {"$match": {**filt, "timestamp": {"$gte": since}}},
-        {
-            "$group": {
-                "_id": {
-                    "$substrBytes": [
-                        {"$ifNull": [{"$toString": "$timestamp"}, ""]},
-                        0,
-                        10,
-                    ]
-                },
-                "count": {"$sum": 1},
-            }
-        },
-        {"$sort": {"_id": 1}},
-    ]).to_list(10)
-    sev_dist = await db.threats.aggregate([
-        {"$match": filt}, {"$group": {"_id": "$severity", "count": {"$sum": 1}}},
-    ]).to_list(10)
+    trend_counts: Counter[str] = Counter()
+    severity_counts: Counter[str] = Counter()
+
+    cursor = db.threats.find(
+        filt,
+        {"timestamp": 1, "severity": 1, "_id": 0},
+    )
+    async for threat in cursor:
+        severity = threat.get("severity")
+        if isinstance(severity, str) and severity:
+            severity_counts[severity] += 1
+
+        timestamp = threat.get("timestamp")
+        if isinstance(timestamp, str) and timestamp >= since:
+            day = timestamp[:10]
+            if len(day) == 10:
+                trend_counts[day] += 1
+
+    trend = [
+        {"_id": day, "count": count}
+        for day, count in sorted(trend_counts.items())
+    ]
+
     return {
         "total_threats": total_threats,
         "open_incidents": open_incidents,
         "critical": critical,
         "high": high,
         "trend": trend,
-        "severity_distribution": {d["_id"]: d["count"] for d in sev_dist if d.get("_id")},
+        "severity_distribution": dict(severity_counts),
     }
