@@ -7,7 +7,7 @@ from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
-from session_security import create_bound_auth_session
+from session_security import create_bound_auth_session, rotate_refresh_session
 
 from auth_helpers import (
     hash_password,
@@ -258,42 +258,14 @@ async def refresh(request: Request, response: Response):
     if not session:
         raise HTTPException(status_code=401, detail="Session revoked or expired")
 
-    # Refresh is an authenticated session operation too: do not let a stolen
-    # refresh cookie move a bound session to a different device context.
-    current_fingerprint = device_fingerprint(request)
-    stored_fingerprint = session.get("device_fingerprint")
-    if stored_fingerprint and not secrets.compare_digest(stored_fingerprint, current_fingerprint):
-        await db.auth_sessions.update_one(
-            {
-                "session_id": payload["sid"],
-                "user_id": payload["sub"],
-                "refresh_jti": payload["jti"],
-                "revoked_at": None,
-            },
-            {"$set": {
-                "revoked_at": datetime.now(timezone.utc),
-                "revoke_reason": "device_context_changed_on_refresh",
-            }},
-        )
-        raise HTTPException(status_code=401, detail="Session device context changed")
+    # Centralized refresh security: device binding plus replay detection.
+    new_jti = await rotate_refresh_session(
+        session, payload["sub"], payload["sid"], payload["jti"], request,
+    )
 
     user = await db.users.find_one({"id": payload["sub"]})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
-
-    new_jti = secrets.token_urlsafe(24)
-    rotated = await db.auth_sessions.update_one(
-        {
-            "session_id": payload["sid"],
-            "user_id": payload["sub"],
-            "refresh_jti": payload["jti"],
-            "revoked_at": None,
-            "expires_at": {"$gt": datetime.now(timezone.utc)},
-        },
-        {"$set": {"refresh_jti": new_jti}},
-    )
-    if getattr(rotated, "modified_count", 0) != 1:
-        raise HTTPException(status_code=401, detail="Refresh token already used or session changed")
 
     access = create_access_token(user["id"], user["email"], user["role"], user["tenant"], payload["sid"])
     new_refresh = create_refresh_token(user["id"], payload["sid"], new_jti)
