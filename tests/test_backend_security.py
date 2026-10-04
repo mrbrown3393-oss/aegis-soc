@@ -1,3 +1,4 @@
+import importlib.util
 import os
 import sys
 
@@ -5,6 +6,19 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 # Ensure the test imports Aegis' backend/server.py rather than any preloaded
 # third-party module also named `server`.
 sys.modules.pop("server", None)
+
+def _aegis_app():
+    """Load the repository's backend/server.py explicitly, avoiding module-name collisions."""
+    backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend"))
+    server_path = os.path.join(backend_dir, "server.py")
+    sys.path.insert(0, backend_dir)
+    sys.modules.pop("server", None)
+    spec = importlib.util.spec_from_file_location("server", server_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["server"] = module
+    spec.loader.exec_module(module)
+    return module.app
 
 os.environ.update({
     "MONGO_URL": "mongodb://localhost:27017",
@@ -23,7 +37,7 @@ os.environ.update({
 
 
 def test_backend_imports_and_security_routes():
-    from server import app
+    app = _aegis_app()
 
     paths = {route.path for route in app.routes if hasattr(route, "path")}
     assert any(path.startswith("/api/") for path in paths)
@@ -34,7 +48,7 @@ def test_backend_imports_and_security_routes():
 
 
 def test_security_headers_middleware_is_registered():
-    from server import app
+    app = _aegis_app()
 
     middleware_names = {m.cls.__name__ for m in app.user_middleware}
     assert "SecurityHeadersMiddleware" in middleware_names
@@ -96,7 +110,7 @@ def test_production_rejects_wildcard_cors(monkeypatch):
 
 def test_csrf_guard_blocks_cross_origin_authenticated_mutation():
     from fastapi.testclient import TestClient
-    from server import app
+    app = _aegis_app()
 
     client = TestClient(app)
     client.cookies.set("access_token", "test-cookie")
@@ -107,7 +121,7 @@ def test_csrf_guard_blocks_cross_origin_authenticated_mutation():
 
 def test_csrf_guard_blocks_authenticated_mutation_without_origin_or_referer():
     from fastapi.testclient import TestClient
-    from server import app
+    app = _aegis_app()
 
     client = TestClient(app)
     client.cookies.set("access_token", "test-cookie")
@@ -118,7 +132,7 @@ def test_csrf_guard_blocks_authenticated_mutation_without_origin_or_referer():
 
 def test_csrf_guard_allows_configured_origin():
     from fastapi.testclient import TestClient
-    from server import app
+    app = _aegis_app()
 
     client = TestClient(app)
     client.cookies.set("access_token", "test-cookie")
@@ -245,7 +259,7 @@ def test_proxy_ip_does_not_trust_all_forwarded_hops():
 
 
 def test_telemetry_fusion_requires_operator_role():
-    from server import app
+    app = _aegis_app()
     from anomaly import fuse_telemetry
 
     dependency = next(
