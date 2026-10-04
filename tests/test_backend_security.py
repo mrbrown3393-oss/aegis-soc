@@ -289,7 +289,6 @@ def test_telemetry_fusion_requires_operator_role():
 
     # Inspect the FastAPI dependency declared on the endpoint itself instead
     # of depending on the composed app route table.
-    dependency = fuse_telemetry.__globals__["Depends"] if False else None
     import inspect
 
     parameter = inspect.signature(fuse_telemetry).parameters["user"]
