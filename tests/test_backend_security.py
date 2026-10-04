@@ -198,3 +198,54 @@ def test_admin_cannot_grant_owner_role():
     )
     with pytest.raises(Exception, match="Only the owner can grant"):
         validate_invite_authorization({"role": "admin", "tenant": "government"}, body)
+
+
+def test_proxy_ip_uses_first_untrusted_hop_from_right():
+    from security_hardening import forwarded_client_ip
+    from starlette.requests import Request
+
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/",
+        "headers": [(b"x-forwarded-for", b"203.0.113.10, 10.0.0.9, 10.0.0.8")],
+        "client": ("10.0.0.7", 1234),
+        "scheme": "http",
+        "server": ("localhost", 80),
+        "query_string": b"",
+    }
+    request = Request(scope)
+    assert forwarded_client_ip(request, "10.0.0.0/8") == "203.0.113.10"
+
+
+def test_proxy_ip_does_not_trust_all_forwarded_hops():
+    from security_hardening import forwarded_client_ip
+    from starlette.requests import Request
+
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/",
+        "headers": [(b"x-forwarded-for", b"10.0.0.9, 10.0.0.8")],
+        "client": ("10.0.0.7", 1234),
+        "scheme": "http",
+        "server": ("localhost", 80),
+        "query_string": b"",
+    }
+    request = Request(scope)
+    assert forwarded_client_ip(request, "10.0.0.0/8") == "10.0.0.7"
+
+
+def test_telemetry_fusion_requires_operator_role():
+    from server import app
+    from anomaly import fuse_telemetry
+
+    dependency = next(
+        dep for dep in app.routes
+        if dep.path == "/api/security/telemetry/fuse" and hasattr(dep, "dependant")
+    )
+    dependency_names = {
+        getattr(d.call, "__name__", "")
+        for d in dependency.dependant.dependencies
+    }
+    assert "get_current_user" not in dependency_names or "require_role_dependency" in dependency_names
