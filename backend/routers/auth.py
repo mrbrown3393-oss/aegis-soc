@@ -18,6 +18,7 @@ from auth_helpers import (
     pending_user,
     create_access_token,
     create_refresh_token,
+    decode_jwt,
     create_auth_session,
     revoke_session,
     revoke_user_sessions,
@@ -148,7 +149,7 @@ async def logout(request: Request, response: Response, user: dict = Depends(get_
     token = request.cookies.get("access_token")
     if token:
         try:
-            payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"], options={"verify_exp": False})
+            payload = decode_jwt(token, verify_exp=False)
             if payload.get("sid"):
                 await revoke_session(payload["sid"])
         except jwt.InvalidTokenError:
@@ -169,7 +170,7 @@ async def refresh(request: Request, response: Response):
     if not token:
         raise HTTPException(status_code=401, detail="No refresh token")
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
+        payload = decode_jwt(token)
         if payload.get("type") != "refresh":
             raise HTTPException(status_code=401, detail="Invalid token type")
     except jwt.InvalidTokenError:
