@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from auth_helpers import hash_password
 from database import db
 from deps import require_role, tenant_filter, write_audit
+from step_up import require_step_up
 from models import UserInvite
 
 router = APIRouter(tags=["users"])
