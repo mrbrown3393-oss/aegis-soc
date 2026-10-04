@@ -311,3 +311,38 @@ def test_idle_session_revokes_after_timeout(monkeypatch):
         assert await active_session("session-1", "user-1") is False
 
     asyncio.run(run())
+
+
+
+def test_jwt_rotation_accepts_previous_key(monkeypatch):
+    from auth_helpers import create_access_token, decode_jwt
+    from config import settings
+    monkeypatch.setattr(settings, "JWT_SECRET", "n" * 64)
+    monkeypatch.setattr(settings, "JWT_PREVIOUS_SECRET", "o" * 64)
+    token = create_access_token("user-1", "user@example.com", "analyst", "private", "session-1")
+    assert decode_jwt(token)["sub"] == "user-1"
+
+
+def test_jwt_rotation_verifies_legacy_previous_key(monkeypatch):
+    import jwt
+    from datetime import datetime, timezone, timedelta
+    from auth_helpers import decode_jwt
+    from config import settings
+    old = "o" * 64
+    monkeypatch.setattr(settings, "JWT_SECRET", "n" * 64)
+    monkeypatch.setattr(settings, "JWT_PREVIOUS_SECRET", old)
+    token = jwt.encode({"sub": "user-2", "type": "access", "sid": "session-2", "exp": datetime.now(timezone.utc) + timedelta(minutes=5)}, old, algorithm="HS256", headers={"kid": "previous"})
+    assert decode_jwt(token)["sub"] == "user-2"
+
+
+def test_jwt_rotation_rejects_retired_key(monkeypatch):
+    import jwt
+    import pytest
+    from datetime import datetime, timezone, timedelta
+    from auth_helpers import decode_jwt
+    from config import settings
+    monkeypatch.setattr(settings, "JWT_SECRET", "n" * 64)
+    monkeypatch.setattr(settings, "JWT_PREVIOUS_SECRET", "o" * 64)
+    token = jwt.encode({"sub": "user-3", "type": "access", "exp": datetime.now(timezone.utc) + timedelta(minutes=5)}, "p" * 64, algorithm="HS256", headers={"kid": "retired"})
+    with pytest.raises(jwt.InvalidTokenError):
+        decode_jwt(token)
