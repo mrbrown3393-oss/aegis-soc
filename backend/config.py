@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     MONGO_URL: str = "mongodb://localhost:27017"
     DB_NAME: str = "aegis_soc"
     JWT_SECRET: str = "change-me-to-a-64-char-hex-string"
+    JWT_PREVIOUS_SECRET: str = ""
     ADMIN_EMAIL: str = "william.brown@aegis-soc.io"
     ADMIN_PASSWORD: str = "change-me"
     ANALYST_EMAIL: str = "analyst@aegis-soc.io"
@@ -58,6 +59,8 @@ def validate_security_settings() -> None:
         return
     if settings.JWT_SECRET == "change-me-to-a-64-char-hex-string" or len(settings.JWT_SECRET) < 32:
         raise RuntimeError("Production requires a strong JWT_SECRET of at least 32 characters.")
+    if settings.JWT_PREVIOUS_SECRET and len(settings.JWT_PREVIOUS_SECRET) < 32:
+        raise RuntimeError("Production JWT_PREVIOUS_SECRET must be empty or at least 32 characters.")
     if settings.ADMIN_PASSWORD == "change-me" or settings.ANALYST_PASSWORD == "change-me":
         raise RuntimeError("Production requires non-default operator passwords.")
     if not settings.MFA_REQUIRED:
