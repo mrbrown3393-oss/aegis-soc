@@ -3,7 +3,7 @@ Aegis SOC — FastAPI backend.
 
 Security posture (see SECURITY_DOSSIER.md for full control mapping):
 - bcrypt cost 12, per-password salt
-- JWT access (12h) + refresh (7d) in httpOnly, secure, samesite=none cookies
+- JWT access (15m) + rotating refresh (7d) in httpOnly, secure, SameSite cookies
 - Brute-force lockout: 5 failed attempts per {ip}:{email} → 15-min lockout
 - Tenant isolation via tenant_filter() — non-privileged users hard-scoped
 - Audit trail on every mutating action (actor, action, resource, ip, tenant, timestamp)
@@ -176,8 +176,9 @@ app.add_middleware(
 
 mongo_kwargs = {
     "tls": settings.MONGO_TLS,
-    "tlsAllowInvalidCertificates": settings.MONGO_TLS_ALLOW_INVALID_CERTS,
 }
+if settings.MONGO_TLS:
+    mongo_kwargs["tlsAllowInvalidCertificates"] = settings.MONGO_TLS_ALLOW_INVALID_CERTS
 if settings.MONGO_TLS_CA_FILE:
     if settings.MONGO_TLS:
         mongo_kwargs["tlsCAFile"] = settings.MONGO_TLS_CA_FILE
@@ -274,12 +275,13 @@ def _pending_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Invalid MFA session")
     return payload
 
-def create_access_token(user_id: str, email: str, role: str, tenant: str) -> str:
+def create_access_token(user_id: str, email: str, role: str, tenant: str, session_id: str) -> str:
     payload = {
         "sub": user_id,
         "email": email,
         "role": role,
         "tenant": tenant,
+        "sid": session_id,
         "type": "access",
         "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_MINUTES),
         "iat": datetime.now(timezone.utc),
@@ -287,14 +289,55 @@ def create_access_token(user_id: str, email: str, role: str, tenant: str) -> str
     return jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
 
 
-def create_refresh_token(user_id: str) -> str:
+def create_refresh_token(user_id: str, session_id: str, jti: str) -> str:
     payload = {
         "sub": user_id,
+        "sid": session_id,
+        "jti": jti,
         "type": "refresh",
         "exp": datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_DAYS),
         "iat": datetime.now(timezone.utc),
     }
     return jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
+
+async def create_auth_session(user_id: str) -> tuple[str, str]:
+    """Create a server-side session so logout/reset can revoke JWTs immediately."""
+    session_id = secrets.token_urlsafe(24)
+    refresh_jti = secrets.token_urlsafe(24)
+    now = datetime.now(timezone.utc)
+    await db.auth_sessions.insert_one({
+        "session_id": session_id,
+        "user_id": user_id,
+        "refresh_jti": refresh_jti,
+        "created_at": now,
+        "expires_at": now + timedelta(days=REFRESH_TOKEN_DAYS),
+        "revoked_at": None,
+    })
+    return session_id, refresh_jti
+
+
+async def revoke_session(session_id: str) -> None:
+    await db.auth_sessions.update_one(
+        {"session_id": session_id, "revoked_at": None},
+        {"$set": {"revoked_at": datetime.now(timezone.utc)}},
+    )
+
+
+async def revoke_user_sessions(user_id: str) -> None:
+    await db.auth_sessions.update_many(
+        {"user_id": user_id, "revoked_at": None},
+        {"$set": {"revoked_at": datetime.now(timezone.utc)}},
+    )
+
+
+async def active_session(session_id: str, user_id: str) -> bool:
+    session = await db.auth_sessions.find_one({
+        "session_id": session_id,
+        "user_id": user_id,
+        "revoked_at": None,
+        "expires_at": {"$gt": datetime.now(timezone.utc)},
+    })
+    return session is not None
 
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
@@ -326,13 +369,15 @@ async def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
-        if payload.get("type") != "access":
+        if payload.get("type") != "access" or not payload.get("sid"):
             raise HTTPException(status_code=status.HTTP_401_UNSUPPORTED_MEDIA_TYPE, detail="Invalid token type")
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=status.HTTP_401_TOKEN_EXPIRED, detail="Token expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=status.HTTP_401_INVALID_TOKEN, detail="Invalid token")
 
+    if not await active_session(payload["sid"], payload["sub"]):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session revoked or expired")
     user = await db.users.find_one({"id": payload["sub"]})
     if not user:
         raise HTTPException(status_code=status.HTTP_401_NOT_FOUND, detail="User not found")
@@ -629,8 +674,9 @@ async def login(body: LoginRequest, request: Request, response: Response):
             "role": user["role"],
             "tenant": user["tenant"],
         }
-    access = create_access_token(user["id"], user["email"], user["role"], user["tenant"])
-    refresh = create_refresh_token(user["id"])
+    session_id, refresh_jti = await create_auth_session(user["id"])
+    access = create_access_token(user["id"], user["email"], user["role"], user["tenant"], session_id)
+    refresh = create_refresh_token(user["id"], session_id, refresh_jti)
     set_auth_cookies(response, access, refresh)
     await write_audit(user["email"], "login", "auth", request, user["tenant"])
     return {"message": "Logged in", "email": user["email"], "role": user["role"], "tenant": user["tenant"]}
@@ -672,6 +718,14 @@ async def mfa_verify(body: dict, request: Request, response: Response):
 
 @api_router.post("/auth/logout")
 async def logout(request: Request, response: Response, user: dict = Depends(get_current_user)):
+    token = request.cookies.get("access_token")
+    if token:
+        try:
+            payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
+            if payload.get("sid"):
+                await revoke_session(payload["sid"])
+        except jwt.InvalidTokenError:
+            pass
     clear_auth_cookies(response)
     await write_audit(user["email"], "logout", "auth", request, user["tenant"])
     return {"message": "Logged out"}
