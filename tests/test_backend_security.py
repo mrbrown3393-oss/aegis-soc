@@ -110,3 +110,34 @@ def test_csrf_guard_allows_configured_origin():
     # The CSRF guard must allow the configured origin; downstream auth may reject
     # the intentionally fake token, but it must not reject it as cross-origin.
     assert response.status_code != 403
+
+
+def test_totp_accepts_current_and_adjacent_time_step(monkeypatch):
+    from server import _mfa_secret, _totp, _verify_totp, settings
+
+    monkeypatch.setattr(settings, "MFA_MASTER_SECRET", "m" * 64)
+    monkeypatch.setattr(settings, "AEGIS_ENV", "test")
+    secret = _mfa_secret("test-user")
+    code = _totp(secret, 1_000_000)
+    assert _verify_totp(secret, code)
+    assert _totp(secret, 1_000_030) == code
+    assert not _verify_totp(secret, "000000")
+
+
+def test_production_requires_mfa_master_secret(monkeypatch):
+    from server import settings, validate_security_settings
+
+    monkeypatch.setattr(settings, "AEGIS_ENV", "production")
+    monkeypatch.setattr(settings, "JWT_SECRET", "x" * 64)
+    monkeypatch.setattr(settings, "ADMIN_PASSWORD", "real-production-password")
+    monkeypatch.setattr(settings, "ANALYST_PASSWORD", "real-production-password")
+    monkeypatch.setattr(settings, "MFA_REQUIRED", True)
+    monkeypatch.setattr(settings, "MFA_MASTER_SECRET", "")
+    monkeypatch.setattr(settings, "MONGO_TLS", True)
+    monkeypatch.setattr(settings, "MONGO_TLS_ALLOW_INVALID_CERTS", False)
+    monkeypatch.setattr(settings, "CORS_ORIGINS", "https://console.example.com")
+    monkeypatch.setattr(settings, "FRONTEND_URL", "https://console.example.com")
+
+    import pytest
+    with pytest.raises(RuntimeError, match="MFA_MASTER_SECRET"):
+        validate_security_settings()
