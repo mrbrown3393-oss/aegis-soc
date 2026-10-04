@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import secrets
+import random
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -38,7 +39,7 @@ async def threats_live(user: dict = Depends(require_role("owner", "admin", "anal
         "description": "Simulated live telemetry — not a real attack.",
         "source_ip": f"{secrets.randbelow(255)}.{secrets.randbelow(255)}.{secrets.randbelow(255)}.{secrets.randbelow(255)}",
         "geo": secrets.choice(["RU", "CN", "KP", "IR", "US", "DE"]),
-        "confidence": round(secrets.uniform(0.5, 0.99), 2),
+        "confidence": round(random.uniform(0.5, 0.99), 2),
         "affected_asset": f"asset-{secrets.randbelow(60)+1:03d}",
         "timestamp": now.isoformat(),
     }
