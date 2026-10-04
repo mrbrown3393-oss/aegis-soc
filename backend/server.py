@@ -39,7 +39,7 @@ from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request, status,
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from pydantic_settings import BaseSettings
 
 from security_hardening import SecurityHeadersMiddleware, forwarded_client_ip
@@ -145,7 +145,7 @@ async def csrf_origin_guard(request: Request, call_next):
             source = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
         else:
             source = None
-        if source and source not in allowed_csrf_origins():
+        if source is None or source not in allowed_csrf_origins():
             return JSONResponse(status_code=403, content={"detail": "Cross-origin request blocked"})
     return await call_next(request)
 
@@ -490,7 +490,7 @@ IncidentStatus = Literal["new", "investigating", "contained", "resolved"]
 
 class RegisterRequest(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=6)
+    password: str = Field(min_length=12, max_length=72)
     name: str = Field(min_length=1, max_length=100)
 
 
@@ -505,7 +505,7 @@ class PasswordResetRequest(BaseModel):
 
 class PasswordResetConfirm(BaseModel):
     token: str
-    new_password: str = Field(min_length=6)
+    new_password: str = Field(min_length=12, max_length=72)
 
 
 class IncidentUpdate(BaseModel):
