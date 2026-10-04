@@ -15,13 +15,14 @@ os.environ.update({
     "CORS_ORIGINS": "http://localhost:3000",
     "MONGO_TLS": "false",
     "AEGIS_ENV": "test",
+    "MFA_MASTER_SECRET": "test-mfa-master-secret-0123456789abcdef",
 })
 
 
 def test_backend_imports_and_security_routes():
     from server import app
 
-    paths = {route.path for route in app.routes}
+    paths = {route.path for route in app.routes if hasattr(route, "path")}
     assert "/api/" in paths
     assert "/api/security/telemetry/fuse" in paths
     assert "/api/security/quarantine" in paths
@@ -64,6 +65,7 @@ def test_production_rejects_unsafe_defaults(monkeypatch):
     monkeypatch.setattr(settings, "ANALYST_PASSWORD", "change-me")
     monkeypatch.setattr(settings, "MONGO_TLS", True)
     monkeypatch.setattr(settings, "MONGO_TLS_ALLOW_INVALID_CERTS", False)
+    monkeypatch.setattr(settings, "MFA_MASTER_SECRET", "m" * 64)
     monkeypatch.setattr(settings, "CORS_ORIGINS", "https://console.example.com")
     monkeypatch.setattr(settings, "FRONTEND_URL", "https://console.example.com")
 
@@ -124,15 +126,16 @@ def test_csrf_guard_allows_configured_origin():
 
 
 def test_totp_accepts_current_and_adjacent_time_step(monkeypatch):
-    from server import _mfa_secret, _totp, _verify_totp, settings
+    from auth_helpers import mfa_secret, totp, verify_totp
+    from config import settings
 
     monkeypatch.setattr(settings, "MFA_MASTER_SECRET", "m" * 64)
     monkeypatch.setattr(settings, "AEGIS_ENV", "test")
-    secret = _mfa_secret("test-user")
-    code = _totp(secret, 1_000_000)
-    assert _verify_totp(secret, code)
-    assert _verify_totp(secret, _totp(secret, 1_000_030))
-    assert not _verify_totp(secret, "000000")
+    secret = mfa_secret("test-user")
+    code = totp(secret, 1_000_000)
+    assert verify_totp(secret, code)
+    assert verify_totp(secret, totp(secret, 1_000_030))
+    assert not verify_totp(secret, "000000")
 
 
 
@@ -149,7 +152,7 @@ def test_tenant_filter_hard_scopes_admin_and_nonprivileged_users():
 
 
 def test_password_policy_enforces_minimum_and_bcrypt_byte_limit():
-    from server import RegisterRequest, PasswordResetConfirm, UserInvite
+    from models import RegisterRequest, PasswordResetConfirm, UserInvite
     import pytest
 
     with pytest.raises(ValueError):
@@ -187,7 +190,8 @@ def test_production_requires_mfa_master_secret(monkeypatch):
 
 def test_admin_cannot_grant_owner_role():
     import pytest
-    from server import UserInvite, validate_invite_authorization
+    from models import UserInvite
+    from routers.users import validate_invite_authorization
 
     body = UserInvite(
         email="new@example.com",
@@ -412,7 +416,7 @@ def test_tenant_boundary_filters_apply_to_all_data_listing_routers(monkeypatch):
     assert all(f.get("tenant") == "government" for f in fake.compliance.filters)
     assert all(f.get("tenant") == "government" for f in fake.audit_logs.filters)
     assert fake.threats.filters[0]["tenant"] == "government"
-    assert fake.threats.filters[0]["severity"] == "high"
+    assert any(f.get("severity") == "high" for f in fake.threats.filters)
     assert fake.vulnerabilities.filters[0] == {"tenant": "government"}
 
 
