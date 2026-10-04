@@ -1,19 +1,12 @@
-"""Zero Trust request/session policy for Aegis SOC.
-
-Principles:
-- authenticate every protected request;
-- continuously validate the server-side session;
-- bind sessions to a device/browser fingerprint;
-- require MFA-strength sessions in production;
-- fail closed on missing trust context;
-- emit a request correlation ID for audit/incident response.
-"""
+"""Zero Trust request/session policy for Aegis SOC."""
 from __future__ import annotations
 
 import hashlib
 import secrets
 
 from fastapi import HTTPException, Request, status
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 
 from config import settings
 
@@ -26,6 +19,8 @@ PUBLIC_PATHS = {
     "/api/auth/refresh",
     "/api/auth/password-reset/request",
     "/api/auth/password-reset/confirm",
+    "/api/auth/mfa/setup",
+    "/api/auth/mfa/verify",
 }
 
 
@@ -51,12 +46,14 @@ def device_fingerprint(request: Request) -> str:
 
 def enforce_protected_path(request: Request) -> None:
     """Fail closed for unexpected API routes that bypass authentication dependencies."""
-    if request.url.path.startswith("/api/") and request.url.path not in PUBLIC_PATHS:
-        if not request.cookies.get("access_token"):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required",
-            )
+    path = request.url.path
+    if path.startswith("/api/auth/sso/"):
+        return
+    if path.startswith("/api/") and path not in PUBLIC_PATHS and not request.cookies.get("access_token"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
 
 
 def require_mfa_strength(auth_strength: str | None) -> None:
@@ -66,3 +63,16 @@ def require_mfa_strength(auth_strength: str | None) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="MFA-authenticated session required",
         )
+
+
+class ZeroTrustMiddleware(BaseHTTPMiddleware):
+    """Global fail-closed guard for API endpoints."""
+
+    async def dispatch(self, request: Request, call_next):
+        try:
+            enforce_protected_path(request)
+        except HTTPException as exc:
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id(request)
+        return response
