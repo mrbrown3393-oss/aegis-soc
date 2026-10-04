@@ -346,3 +346,144 @@ def test_jwt_rotation_rejects_retired_key(monkeypatch):
     token = jwt.encode({"sub": "user-3", "type": "access", "exp": datetime.now(timezone.utc) + timedelta(minutes=5)}, "p" * 64, algorithm="HS256", headers={"kid": "retired"})
     with pytest.raises(jwt.InvalidTokenError):
         decode_jwt(token)
+
+
+def test_tenant_boundary_filters_apply_to_all_data_listing_routers(monkeypatch):
+    import asyncio
+    from routers import incidents, metrics, resources, threats, vulnerabilities
+
+    class Cursor:
+        def __init__(self, rows=None):
+            self.rows = rows or []
+
+        def sort(self, *args, **kwargs):
+            return self
+
+        async def to_list(self, limit):
+            return self.rows[:limit]
+
+    class Collection:
+        def __init__(self):
+            self.filters = []
+
+        def find(self, filt, *args):
+            self.filters.append(filt.copy())
+            return Cursor()
+
+        async def count_documents(self, filt):
+            self.filters.append(filt.copy())
+            return 0
+
+        def aggregate(self, pipeline):
+            self.filters.append(pipeline[0]["$match"].copy())
+            return Cursor()
+
+    class FakeDB:
+        def __init__(self):
+            self.incidents = Collection()
+            self.threats = Collection()
+            self.assets = Collection()
+            self.compliance = Collection()
+            self.audit_logs = Collection()
+            self.vulnerabilities = Collection()
+
+    fake = FakeDB()
+    monkeypatch.setattr(incidents, "db", fake)
+    monkeypatch.setattr(metrics, "db", fake)
+    monkeypatch.setattr(resources, "db", fake)
+    monkeypatch.setattr(threats, "db", fake)
+    monkeypatch.setattr(vulnerabilities, "db", fake)
+
+    user = {"role": "admin", "tenant": "government"}
+
+    async def run():
+        await incidents.list_incidents("private", user)
+        await metrics.metrics_overview("private", user)
+        await resources.list_assets("private", user)
+        await resources.list_compliance("private", user)
+        await resources.list_audit_logs("private", 10, user)
+        await threats.list_threats(10, "high", "private", user)
+        await vulnerabilities.list_vulns("private", user)
+
+    asyncio.run(run())
+
+    assert fake.incidents.filters[0] == {"tenant": "government"}
+    assert all(f.get("tenant") == "government" for f in fake.assets.filters)
+    assert all(f.get("tenant") == "government" for f in fake.compliance.filters)
+    assert all(f.get("tenant") == "government" for f in fake.audit_logs.filters)
+    assert fake.threats.filters[0]["tenant"] == "government"
+    assert fake.threats.filters[0]["severity"] == "high"
+    assert fake.vulnerabilities.filters[0] == {"tenant": "government"}
+
+
+def test_tenant_boundary_filters_apply_to_mutating_endpoints(monkeypatch):
+    import asyncio
+    from routers import incidents, users, vulnerabilities
+    from models import IncidentUpdate, UserInvite
+
+    class Result:
+        matched_count = 0
+
+    class Collection:
+        def __init__(self):
+            self.filters = []
+
+        async def update_one(self, filt, update):
+            self.filters.append(filt.copy())
+            return Result()
+
+        async def find_one(self, filt):
+            self.filters.append(filt.copy())
+            return None
+
+    class FakeDB:
+        def __init__(self):
+            self.incidents = Collection()
+            self.vulnerabilities = Collection()
+            self.users = Collection()
+
+    fake = FakeDB()
+    monkeypatch.setattr(incidents, "db", fake)
+    monkeypatch.setattr(vulnerabilities, "db", fake)
+    monkeypatch.setattr(users, "db", fake)
+
+    user = {"role": "analyst", "tenant": "government", "email": "analyst@example.com"}
+
+    class Request:
+        pass
+
+    async def run():
+        try:
+            await incidents.update_incident(
+                "incident-private",
+                IncidentUpdate(status="resolved"),
+                Request(),
+                user,
+            )
+        except Exception:
+            pass
+
+        try:
+            await vulnerabilities.patch_vuln(
+                "vuln-private",
+                Request(),
+                user,
+            )
+        except Exception:
+            pass
+
+    asyncio.run(run())
+
+    assert fake.incidents.filters[0] == {"id": "incident-private", "tenant": "government"}
+    assert fake.vulnerabilities.filters[0] == {"id": "vuln-private", "tenant": "government"}
+
+    body = UserInvite(
+        email="new@example.com",
+        name="New User",
+        role="viewer",
+        tenant="private",
+        password="StrongPassword123!",
+    )
+    import pytest
+    with pytest.raises(Exception, match="Cannot invite users into another tenant"):
+        users.validate_invite_authorization(user, body)
