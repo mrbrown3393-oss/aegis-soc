@@ -9,6 +9,8 @@ import struct
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
+from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 import bcrypt
 import jwt
 from pymongo import ReturnDocument
@@ -73,7 +75,45 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 # ── MFA / TOTP ──────────────────────────────────────────────────────────────
 
-def mfa_secret(user_id: str) -> str:
+def _mfa_key() -> bytes:
+    if len(settings.MFA_MASTER_SECRET) < 32:
+        if settings.AEGIS_ENV.lower() == "production":
+            raise RuntimeError("MFA master secret is not configured")
+        master = "development-only-mfa-master"
+    else:
+        master = settings.MFA_MASTER_SECRET
+    return hashlib.sha256(master.encode("utf-8")).digest()
+
+
+def generate_mfa_secret() -> str:
+    """Generate a cryptographically random per-user TOTP secret."""
+    return base64.b32encode(secrets.token_bytes(20)).decode("ascii").rstrip("=")
+
+
+def encrypt_mfa_secret(user_id: str, secret_b32: str) -> str:
+    """Encrypt a user's TOTP secret with the deployment MFA key."""
+    nonce = secrets.token_bytes(12)
+    aad = f"aegis-soc:mfa:{user_id}".encode("utf-8")
+    ciphertext = AESGCM(_mfa_key()).encrypt(nonce, secret_b32.encode("ascii"), aad)
+    return base64.urlsafe_b64encode(nonce + ciphertext).decode("ascii")
+
+
+def decrypt_mfa_secret(user_id: str, encrypted: str) -> str:
+    """Decrypt and authenticate a user's stored TOTP secret."""
+    try:
+        blob = base64.urlsafe_b64decode(encrypted.encode("ascii"))
+        if len(blob) <= 12:
+            raise ValueError("Invalid MFA secret")
+        nonce, ciphertext = blob[:12], blob[12:]
+        aad = f"aegis-soc:mfa:{user_id}".encode("utf-8")
+        plaintext = AESGCM(_mfa_key()).decrypt(nonce, ciphertext, aad)
+        return plaintext.decode("ascii")
+    except (ValueError, InvalidTag, UnicodeDecodeError) as exc:
+        raise RuntimeError("Stored MFA secret is invalid") from exc
+
+
+def legacy_mfa_secret(user_id: str) -> str:
+    """Return the legacy deterministic secret for controlled migration only."""
     if len(settings.MFA_MASTER_SECRET) < 32:
         if settings.AEGIS_ENV.lower() == "production":
             raise RuntimeError("MFA master secret is not configured")
