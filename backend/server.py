@@ -25,6 +25,9 @@ from __future__ import annotations
 import os
 import secrets
 import hashlib
+import base64
+import hmac
+import struct
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Literal, Optional
@@ -72,6 +75,8 @@ class Settings(BaseSettings):
     OIDC_CLIENT_ID: str = ""
     OIDC_CLIENT_SECRET: str = ""
     OIDC_SCOPES: str = "openid profile email"
+    MFA_REQUIRED: bool = True
+    MFA_MASTER_SECRET: str = ""
     AEGIS_ENV: str = "development"
     CORS_ALLOW_METHODS: str = "GET,POST,PATCH,DELETE,OPTIONS"
     CORS_ALLOW_HEADERS: str = "Content-Type,Authorization,X-Requested-With"
@@ -100,6 +105,10 @@ def validate_security_settings() -> None:
         raise RuntimeError("Production requires a strong JWT_SECRET of at least 32 characters.")
     if settings.ADMIN_PASSWORD == "change-me" or settings.ANALYST_PASSWORD == "change-me":
         raise RuntimeError("Production requires non-default operator passwords.")
+    if not settings.MFA_REQUIRED:
+        raise RuntimeError("Production requires MFA_REQUIRED=true.")
+    if len(settings.MFA_MASTER_SECRET) < 32:
+        raise RuntimeError("Production requires a strong MFA_MASTER_SECRET of at least 32 characters.")
     if not settings.MONGO_TLS:
         raise RuntimeError("Production requires MongoDB TLS.")
     if settings.MONGO_TLS_ALLOW_INVALID_CERTS:
@@ -193,6 +202,75 @@ def verify_password(password: str, password_hash: str) -> bool:
     except Exception:
         return False
 
+
+def _mfa_secret(user_id: str) -> str:
+    if len(settings.MFA_MASTER_SECRET) < 32:
+        if settings.AEGIS_ENV.lower() == "production":
+            raise RuntimeError("MFA master secret is not configured")
+        master = "development-only-mfa-master"
+    else:
+        master = settings.MFA_MASTER_SECRET
+    digest = hmac.new(master.encode("utf-8"), user_id.encode("utf-8"), hashlib.sha256).digest()
+    return base64.b32encode(digest).decode("ascii").rstrip("=")
+
+def _totp(secret_b32: str, timestamp: Optional[float] = None) -> str:
+    now = datetime.now(timezone.utc).timestamp() if timestamp is None else timestamp
+    counter = int(now // 30)
+    key = base64.b32decode(secret_b32 + "=" * ((8 - len(secret_b32) % 8) % 8), casefold=True)
+    msg = struct.pack(">Q", counter)
+    digest = hmac.new(key, msg, hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    number = struct.unpack(">I", digest[offset:offset + 4])[0] & 0x7FFFFFFF
+    return f"{number % 1_000_000:06d}"
+
+def _verify_totp(secret_b32: str, code: str) -> bool:
+    now = datetime.now(timezone.utc).timestamp()
+    return any(
+        hmac.compare_digest(_totp(secret_b32, now + drift * 30), code)
+        for drift in (-1, 0, 1)
+    )
+
+def _create_mfa_pending_token(user_id: str) -> str:
+    return jwt.encode(
+        {
+            "sub": user_id,
+            "type": "mfa_pending",
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
+            "iat": datetime.now(timezone.utc),
+        },
+        settings.JWT_SECRET,
+        algorithm="HS256",
+    )
+
+def _set_mfa_pending_cookie(response: Response, token: str) -> None:
+    secure = settings.AEGIS_ENV.lower() == "production"
+    samesite = "strict" if secure else "lax"
+    response.set_cookie(
+        key="mfa_pending",
+        value=token,
+        httponly=True,
+        secure=secure,
+        samesite=samesite,
+        max_age=300,
+        path="/",
+    )
+
+def _clear_mfa_pending_cookie(response: Response) -> None:
+    secure = settings.AEGIS_ENV.lower() == "production"
+    samesite = "strict" if secure else "lax"
+    response.delete_cookie(key="mfa_pending", path="/", samesite=samesite, secure=secure)
+
+def _pending_user(request: Request) -> dict:
+    token = request.cookies.get("mfa_pending")
+    if not token:
+        raise HTTPException(status_code=401, detail="MFA verification required")
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
+        if payload.get("type") != "mfa_pending":
+            raise HTTPException(status_code=401, detail="Invalid MFA session")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid MFA session")
+    return payload
 
 def create_access_token(user_id: str, email: str, role: str, tenant: str) -> str:
     payload = {
@@ -539,12 +617,56 @@ async def login(body: LoginRequest, request: Request, response: Response):
         # Generic message — prevents account enumeration
         raise HTTPException(status_code=401, detail="Invalid email or password")
     await clear_failed_attempts(ip, body.email)
+    if settings.MFA_REQUIRED:
+        _set_mfa_pending_cookie(response, _create_mfa_pending_token(user["id"]))
+        return {
+            "message": "MFA verification required",
+            "mfaRequired": True,
+            "mfaEnrolled": bool(user.get("mfaEnrolledAt")),
+            "email": user["email"],
+            "role": user["role"],
+            "tenant": user["tenant"],
+        }
     access = create_access_token(user["id"], user["email"], user["role"], user["tenant"])
     refresh = create_refresh_token(user["id"])
     set_auth_cookies(response, access, refresh)
     await write_audit(user["email"], "login", "auth", request, user["tenant"])
     return {"message": "Logged in", "email": user["email"], "role": user["role"], "tenant": user["tenant"]}
 
+
+@api_router.get("/auth/mfa/setup")
+async def mfa_setup(request: Request):
+    payload = _pending_user(request)
+    user = await db.users.find_one({"id": payload["sub"]})
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid MFA session")
+    if user.get("mfaEnrolledAt"):
+        raise HTTPException(status_code=409, detail="MFA is already enrolled")
+    secret = _mfa_secret(user["id"])
+    label = user["email"].replace("@", "%40")
+    return {
+        "secret": secret,
+        "otpauth": f"otpauth://totp/Aegis%20SOC:{label}?secret={secret}&issuer=Aegis%20SOC&algorithm=SHA1&digits=6&period=30",
+    }
+
+@api_router.post("/auth/mfa/verify")
+async def mfa_verify(body: dict, request: Request, response: Response):
+    code = str(body.get("code", ""))
+    if not code.isdigit() or len(code) != 6:
+        raise HTTPException(status_code=422, detail="MFA code must be six digits")
+    payload = _pending_user(request)
+    user = await db.users.find_one({"id": payload["sub"]})
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid MFA session")
+    if not _verify_totp(_mfa_secret(user["id"]), code):
+        raise HTTPException(status_code=401, detail="Invalid MFA code")
+    await db.users.update_one({"id": user["id"]}, {"$set": {"mfaEnrolledAt": user.get("mfaEnrolledAt") or datetime.now(timezone.utc).isoformat()}})
+    access = create_access_token(user["id"], user["email"], user["role"], user["tenant"])
+    refresh = create_refresh_token(user["id"])
+    set_auth_cookies(response, access, refresh)
+    _clear_mfa_pending_cookie(response)
+    await write_audit(user["email"], "login", "auth", request, user["tenant"])
+    return {"message": "Logged in", "email": user["email"], "role": user["role"], "tenant": user["tenant"], "mfaEnabled": True}
 
 @api_router.post("/auth/logout")
 async def logout(request: Request, response: Response, user: dict = Depends(get_current_user)):
