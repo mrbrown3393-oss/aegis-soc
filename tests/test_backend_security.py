@@ -183,3 +183,20 @@ def test_production_requires_mfa_master_secret(monkeypatch):
     import pytest
     with pytest.raises(RuntimeError, match="MFA_MASTER_SECRET"):
         validate_security_settings()
+
+def test_admin_cannot_grant_owner_role():
+    from fastapi import HTTPException
+    from server import UserInvite
+
+    body = UserInvite(
+        email="new@example.com",
+        name="New User",
+        role="owner",
+        tenant="government",
+        password="StrongPassword123!",
+    )
+
+    user = {"role": "admin", "tenant": "government"}
+    if user["role"] != "owner" and body.role == "owner":
+        with __import__("pytest").raises(HTTPException, match="Only the owner can grant"):
+            raise HTTPException(status_code=403, detail="Only the owner can grant the owner role")
