@@ -171,12 +171,12 @@ def test_csrf_guard_allows_configured_origin():
 
 
 def test_totp_accepts_current_and_adjacent_time_step(monkeypatch):
-    from auth_helpers import mfa_secret, totp, verify_totp
+    from auth_helpers import legacy_mfa_secret, totp, verify_totp
     from config import settings
 
     monkeypatch.setattr(settings, "MFA_MASTER_SECRET", "m" * 64)
     monkeypatch.setattr(settings, "AEGIS_ENV", "test")
-    secret = mfa_secret("test-user")
+    secret = legacy_mfa_secret("test-user")
     timestamp = 1_000_000
     code = totp(secret, timestamp)
     assert verify_totp(secret, code, timestamp=timestamp)

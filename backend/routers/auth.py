@@ -10,7 +10,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from auth_helpers import (
     hash_password,
     verify_password,
-    mfa_secret,
+    generate_mfa_secret,
+    encrypt_mfa_secret,
+    decrypt_mfa_secret,
+    legacy_mfa_secret,
     verify_totp,
     create_mfa_pending_token,
     set_mfa_pending_cookie,
@@ -106,7 +109,20 @@ async def mfa_setup(request: Request):
     user = await db.users.find_one({"id": payload["sub"]})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
-    secret = mfa_secret(user["id"])
+    if user.get("mfaEnrolledAt"):
+        raise HTTPException(status_code=409, detail="MFA is already enrolled")
+
+    if not user.get("mfa_secret_enc"):
+        secret = generate_mfa_secret()
+        await db.users.update_one(
+            {"id": user["id"], "mfa_secret_enc": {"$exists": False}},
+            {"$set": {"mfa_secret_enc": encrypt_mfa_secret(user["id"], secret)}},
+        )
+        user = await db.users.find_one({"id": user["id"]})
+    encrypted = user.get("mfa_secret_enc")
+    if not encrypted:
+        raise HTTPException(status_code=500, detail="MFA setup unavailable")
+    secret = decrypt_mfa_secret(user["id"], encrypted)
     otpauth = f"otpauth://totp/AegisSOC:{user['email']}?secret={secret}&issuer=AegisSOC"
     return {"secret": secret, "otpauth": otpauth}
 
@@ -120,14 +136,37 @@ async def mfa_verify(body: dict, request: Request, response: Response):
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     code = str(body.get("code", "")).strip()
-    secret = mfa_secret(user["id"])
-    if not verify_totp(secret, code):
-        await record_mfa_failure(ip, user["id"])
-        raise HTTPException(status_code=401, detail="Invalid MFA code")
+
+    encrypted = user.get("mfa_secret_enc")
+    if encrypted:
+        secret = decrypt_mfa_secret(user["id"], encrypted)
+        if not verify_totp(secret, code):
+            await record_mfa_failure(ip, user["id"])
+            raise HTTPException(status_code=401, detail="Invalid MFA code")
+    elif user.get("mfaEnrolledAt"):
+        # One-time migration path for accounts enrolled before randomized
+        # per-user secrets were introduced. A valid legacy code proves control
+        # of the old factor, but does not grant a session; it forces re-enrollment.
+        if not verify_totp(legacy_mfa_secret(user["id"]), code):
+            await record_mfa_failure(ip, user["id"])
+            raise HTTPException(status_code=401, detail="Invalid MFA code")
+        new_secret = generate_mfa_secret()
+        await db.users.update_one(
+            {"id": user["id"], "mfaEnrolledAt": {"$exists": True}, "mfa_secret_enc": {"$exists": False}},
+            {
+                "$set": {"mfa_secret_enc": encrypt_mfa_secret(user["id"], new_secret)},
+                "$unset": {"mfaEnrolledAt": ""},
+            },
+        )
+        await clear_mfa_failures(ip, user["id"])
+        raise HTTPException(status_code=409, detail="MFA re-enrollment required")
+    else:
+        raise HTTPException(status_code=409, detail="MFA setup required")
+
     await clear_mfa_failures(ip, user["id"])
     if not user.get("mfaEnrolledAt"):
         await db.users.update_one(
-            {"id": user["id"]},
+            {"id": user["id"], "mfa_secret_enc": {"$exists": True}},
             {"$set": {"mfaEnrolledAt": datetime.now(timezone.utc).isoformat()}},
         )
     clear_mfa_pending_cookie(response)
@@ -190,9 +229,6 @@ async def refresh(request: Request, response: Response):
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
-    # Rotate the refresh token atomically. The old JTI must still be current
-    # when the update executes; otherwise two concurrent refresh requests could
-    # both redeem the same token before either one writes the new JTI.
     new_jti = secrets.token_urlsafe(24)
     rotated = await db.auth_sessions.update_one(
         {
@@ -227,8 +263,6 @@ async def password_reset_request(body: PasswordResetRequest, request: Request):
             "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
             "used": False,
         })
-        # Deliver the token through a dedicated email provider in deployment.
-        # Never log reset tokens or include them in API responses.
     await write_audit(body.email, "password_reset_request", "auth", request)
     return {"message": "If the account exists, a reset link has been sent."}
 
