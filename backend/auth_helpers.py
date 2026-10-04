@@ -144,14 +144,65 @@ def verify_totp(secret_b32: str, code: str, timestamp: Optional[float] = None) -
     )
 
 
-def create_mfa_pending_token(user_id: str) -> str:
+def create_mfa_pending_token(user_id: str, challenge_id: str) -> str:
+    now = datetime.now(timezone.utc)
     return encode_jwt(
         {
             "sub": user_id,
+            "cid": challenge_id,
             "type": "mfa_pending",
-            "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
-            "iat": datetime.now(timezone.utc),
+            "exp": now + timedelta(minutes=5),
+            "iat": now,
         },
+    )
+
+
+async def create_mfa_challenge(user_id: str) -> str:
+    challenge_id = secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc)
+    await db.mfa_challenges.insert_one(
+        {
+            "challenge_id": challenge_id,
+            "user_id": user_id,
+            "created_at": now,
+            "expires_at": now + timedelta(minutes=5),
+            "consumed_at": None,
+        }
+    )
+    return challenge_id
+
+
+async def validate_mfa_challenge(challenge_id: str, user_id: str) -> bool:
+    now = datetime.now(timezone.utc)
+    challenge = await db.mfa_challenges.find_one(
+        {
+            "challenge_id": challenge_id,
+            "user_id": user_id,
+            "consumed_at": None,
+            "expires_at": {"$gt": now},
+        }
+    )
+    return challenge is not None
+
+
+async def consume_mfa_challenge(challenge_id: str, user_id: str) -> bool:
+    now = datetime.now(timezone.utc)
+    consumed = await db.mfa_challenges.update_one(
+        {
+            "challenge_id": challenge_id,
+            "user_id": user_id,
+            "consumed_at": None,
+            "expires_at": {"$gt": now},
+        },
+        {"$set": {"consumed_at": now}},
+    )
+    return getattr(consumed, "modified_count", 0) == 1
+
+
+async def invalidate_mfa_challenges(user_id: str) -> None:
+    await db.mfa_challenges.update_many(
+        {"user_id": user_id, "consumed_at": None},
+        {"$set": {"consumed_at": datetime.now(timezone.utc)}},
     )
 
 
@@ -175,14 +226,16 @@ def clear_mfa_pending_cookie(response: Response) -> None:
     response.delete_cookie(key="mfa_pending", path="/", samesite=samesite, secure=secure)
 
 
-def pending_user(request: Request) -> dict:
+async def pending_user(request: Request) -> dict:
     token = request.cookies.get("mfa_pending")
     if not token:
         raise HTTPException(status_code=401, detail="MFA verification required")
     try:
         payload = decode_jwt(token)
-        if payload.get("type") != "mfa_pending":
+        if payload.get("type") != "mfa_pending" or not payload.get("cid"):
             raise HTTPException(status_code=401, detail="Invalid MFA session")
+        if not await validate_mfa_challenge(payload["cid"], payload["sub"]):
+            raise HTTPException(status_code=401, detail="MFA challenge expired or already used")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid MFA session")
     return payload
