@@ -190,12 +190,23 @@ async def refresh(request: Request, response: Response):
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
-    # Rotate refresh token
+    # Rotate the refresh token atomically. The old JTI must still be current
+    # when the update executes; otherwise two concurrent refresh requests could
+    # both redeem the same token before either one writes the new JTI.
     new_jti = secrets.token_urlsafe(24)
-    await db.auth_sessions.update_one(
-        {"session_id": payload["sid"]},
+    rotated = await db.auth_sessions.update_one(
+        {
+            "session_id": payload["sid"],
+            "user_id": payload["sub"],
+            "refresh_jti": payload["jti"],
+            "revoked_at": None,
+            "expires_at": {"$gt": datetime.now(timezone.utc)},
+        },
         {"$set": {"refresh_jti": new_jti}},
     )
+    if getattr(rotated, "modified_count", 0) != 1:
+        raise HTTPException(status_code=401, detail="Refresh token already used or session changed")
+
     access = create_access_token(user["id"], user["email"], user["role"], user["tenant"], payload["sid"])
     new_refresh = create_refresh_token(user["id"], payload["sid"], new_jti)
     set_auth_cookies(response, access, new_refresh)
