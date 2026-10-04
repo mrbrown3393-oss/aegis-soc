@@ -48,7 +48,7 @@ Aegis SOC is a modular, enterprise cybersecurity platform that unifies threat de
 | 5 | **Compliance** | Control monitoring across NIST 800-53, ISO 27001, SOC 2, HIPAA, FedRAMP, PCI-DSS 4.0, CMMC L2 |
 | 6 | **Assets** | Discovered endpoints, servers, firewalls, routers, DBs with per-asset risk score |
 | 7 | **Users** | Operators & RBAC — invite, assign role, remove |
-| 8 | **Audit Logs** | Immutable action trail with CSV export |
+| 8 | **Audit Logs** | Append-oriented action trail with CSV export |
 
 ## Architecture
 
@@ -168,6 +168,7 @@ All endpoints prefixed `/api`.
 ## Authentication & RBAC
 
 - **Transport**: JWT in `httpOnly`, `secure`, `samesite=none` cookies.
+- **CSRF defense**: state-changing requests carrying Aegis auth cookies are origin-checked against the configured frontend/CORS origins.
 - **Lifetimes**: Access 12h · Refresh 7d.
 - **Hashing**: bcrypt cost 12, per-password salt.
 - **Lockout**: 5 failed attempts → 15-min lockout per `{ip}:{email}`.
@@ -188,7 +189,7 @@ Every record carries a `tenant` field (`government | private | saas`).
 | --- | --- | --- |
 | `users` | 2 | Owner + Analyst |
 | `threats` | 120 | Last 14 days, weighted severity, 3 tenants |
-| `vulnerabilities` | 36 | Real CVEs × 3 tenants |
+| `vulnerabilities` | 36 | CVE-referenced simulated demo records × 3 tenants |
 | `incidents` | 24 | Mixed statuses + kill-chain phases |
 | `assets` | 60 | Workstations, servers, firewalls, routers, DBs |
 | `compliance` | 21 | 7 frameworks × 3 tenants |
