@@ -85,6 +85,23 @@ def validate_security_settings() -> None:
         raise RuntimeError("Production requires an explicit frontend/CORS origin.")
     if not settings.FRONTEND_URL.lower().startswith("https://"):
         raise RuntimeError("Production FRONTEND_URL must use HTTPS.")
+    if settings.OIDC_ENABLED:
+        oidc_required = {
+            "OIDC_ISSUER_URL": settings.OIDC_ISSUER_URL,
+            "OIDC_CLIENT_ID": settings.OIDC_CLIENT_ID,
+            "OIDC_CLIENT_SECRET": settings.OIDC_CLIENT_SECRET,
+            "OIDC_REDIRECT_URI": settings.OIDC_REDIRECT_URI,
+        }
+        if any(not value.strip() for value in oidc_required.values()):
+            raise RuntimeError("Production OIDC requires issuer, client, secret, and redirect URI.")
+        if not settings.OIDC_REDIRECT_URI.lower().startswith("https://"):
+            raise RuntimeError("Production OIDC_REDIRECT_URI must use HTTPS.")
+        if not settings.OIDC_SUCCESS_REDIRECT_URL.lower().startswith("https://"):
+            raise RuntimeError("Production OIDC_SUCCESS_REDIRECT_URL must use HTTPS.")
+        if not settings.OIDC_ALLOWED_TENANTS.strip():
+            raise RuntimeError("Production OIDC requires an explicit tenant allowlist.")
+        if settings.OIDC_REQUIRE_MFA_CLAIM and not settings.OIDC_MFA_AMR_VALUES.strip():
+            raise RuntimeError("Production OIDC MFA enforcement requires at least one allowed AMR value.")
 
 
 def allowed_csrf_origins() -> set[str]:
