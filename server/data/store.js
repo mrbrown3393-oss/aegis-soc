@@ -7,9 +7,9 @@ const passwordHash = bcrypt.hashSync('AegisDemo2026!', 10);
 
 export const store = {
   users: [
-    { id: 'usr-001', email: 'admin@aegis.demo', name: 'Alex Rivera', role: 'admin', passwordHash, mfaEnabled: true, lastLogin: minsAgo(12), status: 'active', department: 'Security Operations' },
-    { id: 'usr-002', email: 'analyst@aegis.demo', name: 'Jordan Lee', role: 'analyst', passwordHash, mfaEnabled: true, lastLogin: minsAgo(45), status: 'active', department: 'Threat Hunting' },
-    { id: 'usr-003', email: 'viewer@aegis.demo', name: 'Sam Patel', role: 'viewer', passwordHash, mfaEnabled: false, lastLogin: hoursAgo(3), status: 'active', department: 'Executive' }
+    { id: 'usr-001', email: 'admin@aegis.demo', name: 'Alex Rivera', role: 'admin', tenant: 'saas', passwordHash, mfaEnabled: true, lastLogin: minsAgo(12), status: 'active', department: 'Security Operations' },
+    { id: 'usr-002', email: 'analyst@aegis.demo', name: 'Jordan Lee', role: 'analyst', tenant: 'government', passwordHash, mfaEnabled: true, lastLogin: minsAgo(45), status: 'active', department: 'Threat Hunting' },
+    { id: 'usr-003', email: 'viewer@aegis.demo', name: 'Sam Patel', role: 'viewer', tenant: 'private', passwordHash, mfaEnabled: false, lastLogin: hoursAgo(3), status: 'active', department: 'Executive' }
   ],
   assets: [
     { id: 'ast-001', name: 'prod-web-01', type: 'server', os: 'Ubuntu 24.04', ip: '10.10.1.21', criticality: 'critical', status: 'healthy', owner: 'Platform', lastSeen: minsAgo(2), tags: ['prod', 'web'] },
@@ -153,4 +153,19 @@ export function addAudit(actor, action, resource, outcome = 'success', details =
     details
   });
   if (store.auditLog.length > 500) store.auditLog.pop();
+}
+
+
+const tenantBuckets = ['government', 'private', 'saas'];
+for (const [name, items] of Object.entries({
+  assets: store.assets,
+  identities: store.identities,
+  alerts: store.alerts,
+  incidents: store.incidents,
+  events: store.events,
+  threatIntel: store.threatIntel,
+  credentials: store.credentials,
+  policies: store.policies
+})) {
+  items.forEach((item, index) => { if (!item.tenant) item.tenant = tenantBuckets[index % tenantBuckets.length]; });
 }
