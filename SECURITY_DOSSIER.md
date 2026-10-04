@@ -597,9 +597,9 @@ This POA&M is the **single authoritative** remediation roadmap. Items are ordere
 | 3 | Expanded multi-policy ISMS (beyond current policy pack) | §1 GOVERN, SOC 2 CC1 | High | 3 | Policy pack v1.0 done |
 | 4 | Business Continuity + Disaster Recovery Plan + first drill | §1 RECOVER, §4.6, SOC 2 CC7 | High | 3 | #3 |
 | 5 | Complete SSO (SAML + OIDC) with assertion/JWKS validation | §3.1, enterprise requirement | High | 3 | Fail-closed routes exist |
-| 6 | Rate limiting on authenticated endpoints | §3.4, FedRAMP SC-5 | High | 1 | — |
+| 6 | Rate limiting on authenticated endpoints | §3.4, FedRAMP SC-5 | **IMPLEMENTED** | 1 | — |
 | 7 | System Use Notification banner on login | FedRAMP AC-8 | Medium | 0.25 | — |
-| 8 | Idle timeout (15 min for FedRAMP) | §3.3, FedRAMP AC-11 | Medium | 1 | — |
+| 8 | Idle timeout (15 min for FedRAMP) | §3.3, FedRAMP AC-11 | **IMPLEMENTED** | 1 | — |
 | 9 | JWT key rotation (two-active-keys pattern) | §3.3, FedRAMP SC-12 | Medium | 2 | — |
 | 10 | FIPS 140-3 validated crypto modules | §4.4, FedRAMP IA-7/SC-13 | Medium | 1 | — |
 | 11 | Audit log forwarding to SIEM / WORM | §6.4, FedRAMP AU-6/-9 | Medium | 1 | Buyer SIEM |
