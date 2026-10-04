@@ -102,7 +102,7 @@ async def login(body: LoginRequest, request: Request, response: Response):
             "role": user["role"],
             "tenant": user["tenant"],
         }
-    session_id, refresh_jti = await create_auth_session(user["id"])
+    session_id, refresh_jti = await create_auth_session(user["id"], device_fingerprint(request))
     access = create_access_token(user["id"], user["email"], user["role"], user["tenant"], session_id)
     refresh = create_refresh_token(user["id"], session_id, refresh_jti)
     set_auth_cookies(response, access, refresh)
