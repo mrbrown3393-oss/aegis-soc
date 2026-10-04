@@ -252,3 +252,62 @@ def test_telemetry_fusion_requires_operator_role():
         cell.cell_contents == ("owner", "admin", "analyst")
         for cell in checker.__closure__
     )
+
+def test_authenticated_rate_limit_is_atomic(monkeypatch):
+    import asyncio
+    import pytest
+    from auth_helpers import enforce_authenticated_rate_limit
+    from config import AUTH_RATE_LIMIT_PER_MINUTE
+
+    class FakeCollection:
+        def __init__(self):
+            self.count = 0
+
+        async def find_one_and_update(self, query, update, upsert, return_document):
+            self.count += update["$inc"]["count"]
+            return {"count": self.count, "window": update["$setOnInsert"]["window"]}
+
+    class FakeDB:
+        def __init__(self):
+            self.auth_rate_limits = FakeCollection()
+
+    monkeypatch.setattr("auth_helpers.db", FakeDB())
+
+    async def run():
+        for _ in range(AUTH_RATE_LIMIT_PER_MINUTE):
+            await enforce_authenticated_rate_limit("203.0.113.10", "user-1")
+        with pytest.raises(Exception, match="Rate limit exceeded"):
+            await enforce_authenticated_rate_limit("203.0.113.10", "user-1")
+
+    asyncio.run(run())
+
+
+def test_idle_session_revokes_after_timeout(monkeypatch):
+    import asyncio
+    from auth_helpers import active_session
+
+    class FakeSessions:
+        async def find_one(self, query):
+            from datetime import datetime, timezone, timedelta
+            old = datetime.now(timezone.utc) - timedelta(minutes=16)
+            return {
+                "session_id": query["session_id"],
+                "user_id": query["user_id"],
+                "created_at": old,
+                "last_activity_at": old,
+                "revoked_at": None,
+            }
+
+        async def update_one(self, query, update):
+            return None
+
+    class FakeDB:
+        def __init__(self):
+            self.auth_sessions = FakeSessions()
+
+    monkeypatch.setattr("auth_helpers.db", FakeDB())
+
+    async def run():
+        assert await active_session("session-1", "user-1") is False
+
+    asyncio.run(run())
