@@ -23,7 +23,7 @@ Aegis SOC is a modular, multi-tenant Security Operations Center platform unifyin
 
 **Stack**: FastAPI + MongoDB + React 19 / Vite 6 / TypeScript, deployed behind Kubernetes ingress.
 
-**FedRAMP Moderate** is a design target only. Aegis holds **no FedRAMP authorization** as of this document’s date. Start with the document map below for baseline, CRM, architecture, FIPS 199, ConMon/CP, and crypto/supply-chain artifacts.
+**FedRAMP Moderate** is a design target only. Aegis holds **no FedRAMP authorization** as of this document’s date. Security engineers: start with `docs/ops/README.md` for runbooks and the POA&M tracker.
 
 ---
 
@@ -90,38 +90,54 @@ Aegis SOC is a modular, multi-tenant Security Operations Center platform unifyin
 
 ### Core security
 
-| Document | Path | Purpose |
-| --- | --- | --- |
-| **Security Dossier** | `SECURITY_DOSSIER.md` | Primary narrative: CSF, ZTA, controls, compliance readiness, POA&M. |
-| **NIST Alignment** | `NIST_ALIGNMENT.md` | NIST SP 800-53 Rev 5 control appendix. |
-| **Policy Pack** | `docs/SECURITY_POLICY_PACK.md` | Information security policy baseline. |
-| **Incident Response Plan** | `docs/INCIDENT_RESPONSE_PLAN.md` | Platform IR (SEV-1..4, lifecycle, evidence). |
-| **Rules of Behavior** | `docs/RULES_OF_BEHAVIOR.md` | Operator acceptable use. |
-| **Hardening Notes** | `SECURITY_HARDENING.md` | Hardening branch release notes. |
+| Document | Path |
+| --- | --- |
+| Security Dossier | `SECURITY_DOSSIER.md` |
+| NIST Alignment | `NIST_ALIGNMENT.md` |
+| Policy Pack | `docs/SECURITY_POLICY_PACK.md` |
+| Incident Response Plan | `docs/INCIDENT_RESPONSE_PLAN.md` |
+| Rules of Behavior | `docs/RULES_OF_BEHAVIOR.md` |
+| Hardening Notes | `SECURITY_HARDENING.md` |
 
 ### FedRAMP Moderate design target
 
-| Document | Path | Purpose |
-| --- | --- | --- |
-| **FedRAMP Moderate Baseline** | `docs/FEDRAMP_MODERATE_BASELINE.md` | Baseline map, gap matrix, authorization path. **Not an ATO.** |
-| **CRM & Parameters** | `docs/FEDRAMP_CRM_AND_PARAMETERS.md` | Customer Responsibility Matrix + organization-defined parameters. |
-| **Security Architecture** | `docs/FEDRAMP_SECURITY_ARCHITECTURE.md` | Mermaid diagrams: boundary, zones, auth, tenancy, encryption, CI/CD. |
-| **FIPS 199 & Data Inventory** | `docs/FIPS_199_AND_DATA_INVENTORY.md` | System categorization worksheet + data element inventory. |
-| **ConMon & Contingency** | `docs/CONMON_AND_CONTINGENCY.md` | Continuous monitoring strategy + CP minimums + restore-drill checklist. |
-| **Crypto & Supply Chain** | `docs/CRYPTO_AND_SUPPLY_CHAIN.md` | Cryptographic inventory + external services register. |
-| **SSP Outline** | `docs/SSP_OUTLINE.md` | FedRAMP-style SSP section map to repo artifacts (outline only). |
+| Document | Path |
+| --- | --- |
+| FedRAMP Moderate Baseline | `docs/FEDRAMP_MODERATE_BASELINE.md` |
+| CRM & Parameters (Variant A) | `docs/FEDRAMP_CRM_AND_PARAMETERS.md` |
+| CRM Variant B (Aegis SaaS) | `docs/FEDRAMP_CRM_VARIANT_B.md` |
+| Security Architecture | `docs/FEDRAMP_SECURITY_ARCHITECTURE.md` |
+| FIPS 199 & Data Inventory | `docs/FIPS_199_AND_DATA_INVENTORY.md` |
+| ConMon & Contingency | `docs/CONMON_AND_CONTINGENCY.md` |
+| Crypto & Supply Chain | `docs/CRYPTO_AND_SUPPLY_CHAIN.md` |
+| SSP Outline | `docs/SSP_OUTLINE.md` |
+
+### Security engineering ops pack
+
+| Document | Path |
+| --- | --- |
+| **Ops pack index** | `docs/ops/README.md` |
+| POA&M Tracker | `docs/ops/POAM_TRACKER.md` |
+| Deployment Hardening Checklist | `docs/ops/DEPLOYMENT_HARDENING_CHECKLIST.md` |
+| Restore Drill Runbook | `docs/ops/RESTORE_DRILL_RUNBOOK.md` |
+| Secret Rotation Runbook | `docs/ops/SECRET_ROTATION_RUNBOOK.md` |
+| Configuration Management Plan | `docs/ops/CONFIGURATION_MANAGEMENT_PLAN.md` |
+| Media Sanitization & Offboarding | `docs/ops/MEDIA_SANITIZATION_AND_OFFBOARDING.md` |
+| Personnel Security | `docs/ops/PERSONNEL_SECURITY.md` |
+| Awareness & Training | `docs/ops/AWARENESS_AND_TRAINING.md` |
+| IR Tabletop Record | `docs/ops/IR_TABLETOP_RECORD.md` |
 
 ### Engineering evidence
 
-| Document | Path | Purpose |
-| --- | --- | --- |
-| **MongoDB Hardening** | `ops/mongodb/` | TLS + WiredTiger encryption-at-rest config/runbook. |
-| **Ingress Headers** | `ops/ingress/security-headers.yaml` | HSTS, CSP, frame denial, etc. |
-| **Security CI** | `.github/workflows/security.yml` | Gitleaks, pip-audit, npm audit, Trivy, SBOM. |
-| **Dependabot** | `.github/dependabot.yml` | Weekly dependency updates. |
-| **Security Tests** | `tests/test_backend_security.py` | Automated control checks. |
-| **SSO Module** | `backend/sso.py` | Fail-closed SAML/OIDC surface. |
-| **Hardening Middleware** | `backend/security_hardening.py` | Security headers + proxy-aware IP. |
+| Document | Path |
+| --- | --- |
+| MongoDB Hardening | `ops/mongodb/` |
+| Ingress Headers | `ops/ingress/security-headers.yaml` |
+| Security CI | `.github/workflows/security.yml` |
+| Dependabot | `.github/dependabot.yml` |
+| Security Tests | `tests/test_backend_security.py` |
+| SSO Module | `backend/sso.py` |
+| Hardening Middleware | `backend/security_hardening.py` |
 
 ---
 
