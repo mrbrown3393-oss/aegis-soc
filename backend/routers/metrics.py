@@ -22,7 +22,18 @@ async def metrics_overview(tenant: Optional[str] = None, user: dict = Depends(ge
     since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     trend = await db.threats.aggregate([
         {"$match": {**filt, "timestamp": {"$gte": since}}},
-        {"$group": {"_id": {"$substr": ["$timestamp", 0, 10]}, "count": {"$sum": 1}}},
+        {
+            "$group": {
+                "_id": {
+                    "$substrBytes": [
+                        {"$ifNull": [{"$toString": "$timestamp"}, ""]},
+                        0,
+                        10,
+                    ]
+                },
+                "count": {"$sum": 1},
+            }
+        },
         {"$sort": {"_id": 1}},
     ]).to_list(10)
     sev_dist = await db.threats.aggregate([
@@ -34,5 +45,5 @@ async def metrics_overview(tenant: Optional[str] = None, user: dict = Depends(ge
         "critical": critical,
         "high": high,
         "trend": trend,
-        "severity_distribution": {d["_id"]: d["count"] for d in sev_dist},
+        "severity_distribution": {d["_id"]: d["count"] for d in sev_dist if d.get("_id")},
     }
