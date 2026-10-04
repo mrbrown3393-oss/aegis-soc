@@ -179,9 +179,11 @@ mongo_kwargs = {
     "tlsAllowInvalidCertificates": settings.MONGO_TLS_ALLOW_INVALID_CERTS,
 }
 if settings.MONGO_TLS_CA_FILE:
-    mongo_kwargs["tlsCAFile"] = settings.MONGO_TLS_CA_FILE
+    if settings.MONGO_TLS:
+        mongo_kwargs["tlsCAFile"] = settings.MONGO_TLS_CA_FILE
 if settings.MONGO_TLS_CERT_KEY_FILE:
-    mongo_kwargs["tlsCertificateKeyFile"] = settings.MONGO_TLS_CERT_KEY_FILE
+    if settings.MONGO_TLS:
+        mongo_kwargs["tlsCertificateKeyFile"] = settings.MONGO_TLS_CERT_KEY_FILE
 client = AsyncIOMotorClient(settings.MONGO_URL, **mongo_kwargs)
 db = client[settings.DB_NAME]
 
