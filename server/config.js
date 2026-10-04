@@ -49,5 +49,7 @@ export const config = {
   COOKIE_SECURE: NODE_ENV === 'production',
   COOKIE_SAMESITE: process.env.COOKIE_SAMESITE || (NODE_ENV === 'production' ? 'strict' : 'lax'),
   MFA_REQUIRED: process.env.MFA_REQUIRED !== 'false',
-  MFA_MASTER_SECRET: process.env.MFA_MASTER_SECRET || ''
+  MFA_MASTER_SECRET: process.env.MFA_MASTER_SECRET || '',
+  SESSION_COOKIE: NODE_ENV === 'production' ? '__Host-aegis_session' : 'aegis_session',
+  MFA_COOKIE: NODE_ENV === 'production' ? '__Host-aegis_mfa_pending' : 'aegis_mfa_pending'
 };
