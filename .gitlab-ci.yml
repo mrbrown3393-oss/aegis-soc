@@ -16,8 +16,8 @@ frontend_build:
   image: node:20-bookworm
   script:
     - cd client
-    - npm ci --omit=optional || npm install
-    - npx vite build
+    - npm install --omit=optional
+    - npm run build
   artifacts:
     paths:
       - client/dist/
