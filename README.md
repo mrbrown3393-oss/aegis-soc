@@ -13,10 +13,10 @@
 
 ## What Is Aegis SOC
 
-Aegis SOC is a modular, enterprise-grade cybersecurity platform that unifies threat detection, incident response, vulnerability management, asset intelligence, continuous compliance, and immutable audit — in a single multi-tenant console with three sovereign deployment postures: **Government**, **Private Sector**, and **SaaS**.
+Aegis SOC is a modular, enterprise cybersecurity platform that unifies threat detection, incident response, vulnerability management, asset intelligence, continuous compliance, and append-oriented audit — in a single multi-tenant console with three sovereign deployment postures: **Government**, **Private Sector**, and **SaaS**.
 
 - **Operator-first.** Dense, high-signal UI designed for tier-1 analysts.
-- **Tenant-isolated.** Three distinct visual + logical tenants — switch at the sidebar, every query is scoped.
+- **Tenant-isolated.** Three visual + logical tenant postures with backend query scoping.
 - **Commercially flexible.** Sell outright, rent monthly, or license to government.
 - **Automatable.** Every endpoint prefixed `/api`; cookies are httpOnly; JWT is standard.
 
@@ -24,12 +24,12 @@ Aegis SOC is a modular, enterprise-grade cybersecurity platform that unifies thr
 
 ### 1. Government
 - **Vibe**: authoritative navy / steel · Accent: `#60a5fa`
-- **Compliance baseline**: FedRAMP Moderate · CMMC Level 2 · FIPS 140-3 · STIG-hardened
+- **Target control baseline**: FedRAMP Moderate · CMMC Level 2 · FIPS 140-3 · STIG-aligned. Certification is not claimed.
 - **Suited for**: federal agencies, state/local government, defense primes, intelligence community
 
 ### 2. Private Sector
 - **Vibe**: corporate warm / amber · Accent: `#f5b041`
-- **Compliance baseline**: SOC 2 Type II · ISO 27001:2022 · PCI-DSS 4.0 · HIPAA
+- **Target control baseline**: SOC 2 Type II · ISO 27001:2022 · PCI-DSS 4.0 · HIPAA. Certification is not claimed.
 - **Suited for**: Fortune 500 security teams, regulated financial / healthcare, growing enterprises
 
 ### 3. SaaS Platform
@@ -43,9 +43,9 @@ Aegis SOC is a modular, enterprise-grade cybersecurity platform that unifies thr
 | --- | --- | --- |
 | 1 | **Overview** | Portfolio KPIs, 7-day trend, severity donut, live threat tape, active incidents |
 | 2 | **Threats** | Correlated SIEM-style events with severity, geo, confidence, source IP, affected asset |
-| 3 | **Vulnerabilities** | Real CVE catalog with CVSS 3.1 scores, patch-tracking per asset |
+| 3 | **Vulnerabilities** | CVE-referenced vulnerability catalog with CVSS scoring and patch-tracking per asset |
 | 4 | **Incidents** | Incident tickets with kill-chain phase, assignee, 4-step status workflow |
-| 5 | **Compliance** | Continuous control monitoring across NIST 800-53, ISO 27001, SOC 2, HIPAA, FedRAMP, PCI-DSS 4.0, CMMC L2 |
+| 5 | **Compliance** | Control monitoring across NIST 800-53, ISO 27001, SOC 2, HIPAA, FedRAMP, PCI-DSS 4.0, CMMC L2 |
 | 6 | **Assets** | Discovered endpoints, servers, firewalls, routers, DBs with per-asset risk score |
 | 7 | **Users** | Operators & RBAC — invite, assign role, remove |
 | 8 | **Audit Logs** | Immutable action trail with CSV export |
@@ -66,7 +66,7 @@ React 19 Frontend (CRA)  --axios, httpOnly JWT cookies-->  FastAPI Backend (/api
 - **Auth**: Access JWT (12h) + refresh JWT (7d) in `secure`, `httpOnly`, `samesite=none` cookies.
 - **Password hashing**: `bcrypt` (cost 12).
 - **Brute-force protection**: 5 failed attempts per `{ip}:{email}` triggers a 15-min lockout.
-- **Audit**: Every mutating action is appended to `audit_logs` with actor, IP, resource, and tenant.
+- **Audit**: Mutating actions are appended to `audit_logs` with actor, IP, resource, and tenant.
 - **Mock data seeder**: Idempotent — runs once on startup and skips if data already exists.
 
 ## Tech Stack
@@ -203,7 +203,7 @@ Seeding is **idempotent**. To re-seed, drop the collections and restart.
 - CORS uses explicit, configurable origins, methods, and headers; wildcard origins are rejected in production.
 - Unique index on `users.email`; TTL indexes on reset tokens and login attempts.
 - Brute-force lockout on login.
-- All mutating actions logged to the immutable audit trail.
+- Mutating actions logged to the append-oriented audit trail.
 - Role gating enforced server-side.
 - No secrets in source; `.env` excluded from version control.
 
