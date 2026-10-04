@@ -3,7 +3,7 @@ import { config } from '../config.js';
 import { store } from '../data/store.js';
 
 export function authenticate(req, res, next) {
-  const token = req.cookies?.['__Host-aegis_session'];
+  const token = req.cookies?.[config.SESSION_COOKIE];
   if (!token) return res.status(401).json({ error: 'Authentication required' });
   try {
     const payload = jwt.verify(token, config.JWT_SECRET, {
