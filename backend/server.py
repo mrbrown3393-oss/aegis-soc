@@ -936,7 +936,7 @@ async def list_threats(limit: int = 50, severity: Optional[str] = None, tenant: 
 
 
 @api_router.get("/threats/live")
-async def threats_live(user: dict = Depends(get_current_user)):
+async def threats_live(user: dict = Depends(require_role("owner", "admin", "analyst"))):
     """Simulates & inserts a new live threat (demo telemetry)."""
     now = datetime.now(timezone.utc)
     threat = {
@@ -968,7 +968,7 @@ async def list_vulns(tenant: Optional[str] = None, user: dict = Depends(get_curr
 
 
 @api_router.post("/vulnerabilities/{vuln_id}/patch")
-async def patch_vuln(vuln_id: str, request: Request, user: dict = Depends(get_current_user)):
+async def patch_vuln(vuln_id: str, request: Request, user: dict = Depends(require_role("owner", "admin", "analyst"))):
     result = await db.vulnerabilities.update_one(
         {"id": vuln_id, **tenant_filter(user)},
         {"$set": {"patched": True, "patched_at": datetime.now(timezone.utc).isoformat(), "patched_by": user["email"]}},
@@ -991,7 +991,7 @@ async def list_incidents(tenant: Optional[str] = None, user: dict = Depends(get_
 
 @api_router.patch("/incidents/{incident_id}")
 async def update_incident(incident_id: str, body: IncidentUpdate, request: Request,
-                          user: dict = Depends(get_current_user)):
+                          user: dict = Depends(require_role("owner", "admin", "analyst"))):
     result = await db.incidents.update_one(
         {"id": incident_id, **tenant_filter(user)},
         {"$set": {"status": body.status, "updated_at": datetime.now(timezone.utc).isoformat()}},
