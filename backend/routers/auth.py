@@ -50,7 +50,6 @@ from models import (
     PasswordResetConfirm,
 )
 from security_hardening import forwarded_client_ip
-from zero_trust import device_fingerprint
 from step_up import create_step_up_token
 import jwt
 
