@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     OIDC_CLIENT_ID: str = ""
     OIDC_CLIENT_SECRET: str = ""
     OIDC_SCOPES: str = "openid profile email"
+    OIDC_REDIRECT_URI: str = ""
+    OIDC_SUCCESS_REDIRECT_URL: str = "http://localhost:3000"
+    OIDC_TENANT_CLAIM: str = "tenant"
+    OIDC_ALLOWED_TENANTS: str = "private"
+    OIDC_ROLE_CLAIM: str = "role"
+    OIDC_REQUIRE_MFA_CLAIM: bool = True
+    OIDC_MFA_AMR_VALUES: str = "mfa"
     MFA_REQUIRED: bool = True
     MFA_MASTER_SECRET: str = ""
     AEGIS_ENV: str = "development"
