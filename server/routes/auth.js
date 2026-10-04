@@ -65,7 +65,7 @@ function signSession(user) {
   );
 }
 function setSession(res, token) {
-  res.cookie('__Host-aegis_session', token, {
+  res.cookie(config.SESSION_COOKIE, token, {
     httpOnly: true, secure: config.COOKIE_SECURE, sameSite: config.COOKIE_SAMESITE,
     path: '/', maxAge: 15 * 60 * 1000
   });
@@ -74,12 +74,12 @@ function setPending(res, user) {
   const token = jwt.sign({ sub: user.id, role: user.role, tenant: user.tenant, type: 'mfa_pending' }, config.JWT_SECRET, {
     expiresIn: '5m', algorithm: 'HS256', issuer: 'aegis-soc', audience: 'aegis-soc-api'
   });
-  res.cookie('__Host-aegis_mfa_pending', token, {
+  res.cookie(config.MFA_COOKIE, token, {
     httpOnly: true, secure: config.COOKIE_SECURE, sameSite: config.COOKIE_SAMESITE, path: '/', maxAge: 5 * 60 * 1000
   });
 }
 function clearPending(res) {
-  res.clearCookie('__Host-aegis_mfa_pending', { httpOnly: true, secure: config.COOKIE_SECURE, sameSite: config.COOKIE_SAMESITE, path: '/' });
+  res.clearCookie(config.MFA_COOKIE, { httpOnly: true, secure: config.COOKIE_SECURE, sameSite: config.COOKIE_SAMESITE, path: '/' });
 }
 function clientKey(req, email) { return `${req.ip}:${email.toLowerCase()}`; }
 function checkLockout(req, email) {
@@ -115,7 +115,7 @@ router.post('/login', validate(loginSchema), async (req, res) => {
 });
 
 router.get('/mfa/setup', (req, res) => {
-  const pending = req.cookies?.['__Host-aegis_mfa_pending'];
+  const pending = req.cookies?.[config.MFA_COOKIE];
   if (!pending) return res.status(401).json({ error: 'MFA setup requires a successful password step' });
   try {
     const payload = jwt.verify(pending, config.JWT_SECRET, { algorithms: ['HS256'], issuer: 'aegis-soc', audience: 'aegis-soc-api' });
@@ -129,7 +129,7 @@ router.get('/mfa/setup', (req, res) => {
 });
 
 router.post('/mfa/verify', validate(mfaSchema), (req, res) => {
-  const pending = req.cookies?.['__Host-aegis_mfa_pending'];
+  const pending = req.cookies?.[config.MFA_COOKIE];
   if (!pending) return res.status(401).json({ error: 'MFA verification required' });
   try {
     const payload = jwt.verify(pending, config.JWT_SECRET, { algorithms: ['HS256'], issuer: 'aegis-soc', audience: 'aegis-soc-api' });
@@ -150,8 +150,8 @@ router.get('/me', authenticate, (req, res) => {
 
 router.post('/logout', authenticate, (req, res) => {
   addAudit(req.user.name, 'user.logout', 'auth', 'success', '', req.ip);
-  res.clearCookie('__Host-aegis_session', { httpOnly: true, secure: config.COOKIE_SECURE, sameSite: config.COOKIE_SAMESITE, path: '/' });
-  res.clearCookie('__Host-aegis_mfa_pending', { httpOnly: true, secure: config.COOKIE_SECURE, sameSite: config.COOKIE_SAMESITE, path: '/' });
+  res.clearCookie(config.SESSION_COOKIE, { httpOnly: true, secure: config.COOKIE_SECURE, sameSite: config.COOKIE_SAMESITE, path: '/' });
+  res.clearCookie(config.MFA_COOKIE, { httpOnly: true, secure: config.COOKIE_SECURE, sameSite: config.COOKIE_SAMESITE, path: '/' });
   res.json({ ok: true });
 });
 
