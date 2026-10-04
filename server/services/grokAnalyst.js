@@ -16,7 +16,7 @@ function contextSnapshot() {
     openIncidents: openInc,
     highRiskIdentities: highRiskIds.slice(0, 5),
     expiringCredentials: expiring.map(c => c.name),
-    policyAvg: Math.round(store.policies.reduce((s, p) => s + p.coverage, 0) / store.policies.length),
+    policyAvg: policies.length ? Math.round(policies.reduce((s, p) => s + p.coverage, 0) / policies.length) : 0,
     recentAlertTitles: openAlerts.slice(0, 5).map(a => `[${a.severity}] ${a.title}`)
   };
 }
@@ -81,16 +81,16 @@ async function callXai(messages) {
   }
 }
 
-export function analyzeAlert(alertId) {
-  const alert = store.alerts.find(a => a.id === alertId);
+export function analyzeAlert(alertId, user) {
+  const alert = store.alerts.find(a => a.id === alertId && (user.role === 'admin' || user.role === 'owner' || a.tenant === user.tenant));
   if (!alert) return { error: 'Alert not found' };
   return { alertId, severity: alert.severity, summary: alert.aiSummary || alert.description, mitre: alert.mitre, simulation: true };
 }
 
-export async function chat(message, history = []) {
+export async function chat(message, history = [], user) {
   const q = String(message || '').trim().slice(0, 2000);
   if (!q) return { reply: 'Ask me anything about the current security posture.', simulation: !hasLiveGrok() };
-  const ctx = contextSnapshot();
+  const ctx = contextSnapshot(user);
   const intent = matchIntent(q);
   const contextUsed = { openAlerts: ctx.openAlerts, criticalAlerts: ctx.criticalAlerts, openIncidents: ctx.openIncidents };
   if (hasLiveGrok()) {
