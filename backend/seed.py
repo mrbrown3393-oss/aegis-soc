@@ -14,6 +14,8 @@ async def ensure_indexes() -> None:
     await db.users.create_index("id", unique=True)
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.login_attempts.create_index("key", unique=True)
+    await db.auth_rate_limits.create_index("key", unique=True)
+    await db.auth_rate_limits.create_index("window", expireAfterSeconds=300)
     await db.auth_sessions.create_index("session_id", unique=True)
     await db.auth_sessions.create_index("expires_at", expireAfterSeconds=0)
     for col in ("threats", "incidents", "vulnerabilities", "assets", "compliance", "audit_logs"):
