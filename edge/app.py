@@ -1,7 +1,11 @@
 """Aegis SOC remote security edge admission service."""
 from __future__ import annotations
-import ipaddress, os
+import base64
+import ipaddress
+import json
+import os
 from fastapi import FastAPI, Header, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from edge.policy import EdgePolicy
 
@@ -32,8 +36,11 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 def _authorize_ingress(authorization: str | None) -> None:
-    """Require the shared ingress credential when configured."""
+    """Require the shared ingress credential; production fails closed if absent."""
     expected_token = os.getenv("EDGE_INGRESS_TOKEN", "")
+    production = os.getenv("AEGIS_ENV", "development").lower() == "production"
+    if production and len(expected_token) < 32:
+        raise HTTPException(status_code=503, detail="Edge ingress authentication is not configured")
     if expected_token and authorization != f"Bearer {expected_token}":
         raise HTTPException(status_code=401, detail="Edge caller authentication failed")
 
@@ -72,9 +79,6 @@ async def authz(
     decision = policy.decide(method=method, path=x_original_uri, client_key=client_ip)
     if not decision.allow:
         raise HTTPException(status_code=403, detail="Edge admission denied")
-    import base64
-    import json
-    from fastapi.responses import Response
     payload = decision.__dict__.copy()
     signature = payload.pop("signature")
     encoded = base64.urlsafe_b64encode(

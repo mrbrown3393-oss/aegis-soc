@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 from hashlib import sha256
 import hmac
 import json
@@ -18,7 +19,7 @@ def _decode(value: str) -> dict:
     try:
         padded = value + "=" * (-len(value) % 4)
         payload = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")))
-    except (ValueError, UnicodeError, json.JSONDecodeError) as exc:
+    except (binascii.Error, ValueError, UnicodeError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=403, detail="Invalid edge decision") from exc
     if not isinstance(payload, dict):
         raise HTTPException(status_code=403, detail="Invalid edge decision")

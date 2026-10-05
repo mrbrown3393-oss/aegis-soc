@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     EDGE_AUDIENCE: str = "aegis-api"
     EDGE_MAX_CLOCK_SKEW_SECONDS: int = 30
     EDGE_TRUSTED_CLIENT_IP_HEADER: str = "X-Aegis-Edge-Client-IP"
+    EDGE_INGRESS_TOKEN: str = ""
 
     class Config:
         env_file = ".env"
@@ -96,6 +97,8 @@ def validate_security_settings() -> None:
             raise RuntimeError("Production edge enforcement requires EDGE_VERIFY_SECRET of at least 32 characters.")
         if not settings.EDGE_AUDIENCE.strip():
             raise RuntimeError("Production edge enforcement requires EDGE_AUDIENCE.")
+        if len(settings.EDGE_INGRESS_TOKEN) < 32:
+            raise RuntimeError("Production edge enforcement requires EDGE_INGRESS_TOKEN of at least 32 characters.")
     if settings.OIDC_ENABLED:
         oidc_required = {
             "OIDC_ISSUER_URL": settings.OIDC_ISSUER_URL,

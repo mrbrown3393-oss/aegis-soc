@@ -90,3 +90,31 @@ def test_authz_rejects_malformed_original_uri():
         },
     )
     assert response.status_code == 400
+
+
+def test_authz_rejects_invalid_ingress_token(monkeypatch):
+    monkeypatch.setenv("EDGE_INGRESS_TOKEN", "test-ingress-token-" + "x" * 32)
+    response = client.get(
+        "/v1/authz",
+        headers={
+            "X-Original-Method": "GET",
+            "X-Original-URI": "/api/threats",
+            "X-Client-IP": "192.0.2.32",
+            "Authorization": "Bearer wrong-token",
+        },
+    )
+    assert response.status_code == 401
+
+
+def test_authz_fails_closed_without_production_ingress_token(monkeypatch):
+    monkeypatch.setenv("AEGIS_ENV", "production")
+    monkeypatch.delenv("EDGE_INGRESS_TOKEN", raising=False)
+    response = client.get(
+        "/v1/authz",
+        headers={
+            "X-Original-Method": "GET",
+            "X-Original-URI": "/api/threats",
+            "X-Client-IP": "192.0.2.33",
+        },
+    )
+    assert response.status_code == 503
