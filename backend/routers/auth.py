@@ -59,7 +59,7 @@ router = APIRouter(tags=["auth"])
 
 @router.get("/")
 async def health():
-    return {"status": "ok", "service": "aegis-soc-api", "version": "2.1.0"}
+    return {"status": "ok", "service": "aegis-soc-api", "version": "2.2.0"}
 
 
 @router.post("/auth/register")
