@@ -1,8 +1,8 @@
 # Aegis SOC — NIST SP 800-53 Revision 5 Alignment Appendix
 
 **Document version**: 1.0  
-**Platform version**: v2.1.0  
-**Aligned to**: `SECURITY_DOSSIER.md` v1.1 (2026-10-04)  
+**Platform version**: v2.2.0  
+**Aligned to**: `SECURITY_DOSSIER.md` v1.2 (2026-10-05)  
 **Owner**: William Brown (`william.brown@aegis-soc.io`)  
 **Classification**: UNCLASSIFIED — Shareable under NDA for buyer / investor / contracting diligence
 
@@ -49,7 +49,7 @@ Percentages in the dossier (~48% direct / ~79% direct+partial at v1.0) improve a
 | AC-6(1) | Authorize Access to Security Functions | **IMPLEMENTED** | Owner/admin gated for user management |
 | AC-7 | Unsuccessful Logon Attempts | **IMPLEMENTED** | 5 failures → 15-min lockout per `{ip}:{email}`; proxy-aware IP via `forwarded_client_ip()` |
 | AC-8 | System Use Notification | **PLANNED** | Login banner for FedRAMP |
-| AC-11 | Device Lock / Session Lock | **PLANNED** | Idle timeout (15 min target) |
+| AC-11 | Device Lock / Session Lock | **IMPLEMENTED** | 15-minute rolling server-side idle timeout in `active_session()` with regression coverage |
 | AC-12 | Session Termination | **IMPLEMENTED** | Logout clears cookies; `auth_sessions` revocation; session checked on each request |
 | AC-14 | Permitted Actions Without Identification | **IMPLEMENTED** | Only public auth endpoints (register/login/reset/SSO config) and health; all other `/api/*` require auth |
 | AC-17 | Remote Access | **PARTIAL** | HTTPS-only in production; no VPN product shipped — buyer network |
@@ -132,7 +132,7 @@ Percentages in the dossier (~48% direct / ~79% direct+partial at v1.0) improve a
 | IA-5(2) | PKI-Based Authentication | **PLANNED** | PIV / smart card |
 | IA-5(6) | Protection of Authenticators | **IMPLEMENTED** | Hashes only; secrets from env; not logged |
 | IA-5(7) | No Embedded Unencrypted Static Authenticators | **IMPLEMENTED** | Production rejects default passwords and weak JWT secret |
-| IA-8 | Identification and Authentication (Non-Organizational Users) | **PARTIAL** | Registration path for viewers; enterprise SSO **PARTIAL** (fail-closed until configured) |
+| IA-8 | Identification and Authentication (Non-Organizational Users) | **IMPLEMENTED** | Registration path plus production SAML/OIDC federation with fail-closed provider validation and tenant mapping; provider configuration remains deployment scope |
 | IA-11 | Re-Authentication | **PLANNED** | Step-up on high-risk actions |
 | IA-12 | Identity Proofing | **NOT APPLICABLE** | Out of band / customer responsibility for enterprise IdP |
 
@@ -253,11 +253,11 @@ Percentages in the dossier (~48% direct / ~79% direct+partial at v1.0) improve a
 
 | Control | Title | Status | Evidence / Notes |
 | --- | --- | --- | --- |
-| SC-5 | Denial-of-Service Protection | **PARTIAL** | Rate limiting on authenticated endpoints **PLANNED**; buyer DDoS/WAF |
+| SC-5 | Denial-of-Service Protection | **PARTIAL** | Mongo-backed authenticated endpoint rate limiting is **IMPLEMENTED**; perimeter DDoS/WAF remains buyer/hosting scope |
 | SC-7 | Boundary Protection | **PARTIAL** | Ingress TLS; network policies buyer-side |
 | SC-8 | Transmission Confidentiality and Integrity | **IMPLEMENTED** | TLS at ingress; production requires HTTPS frontend |
 | SC-8(1) | Cryptographic Protection | **IMPLEMENTED** | TLS 1.2+ / 1.3 preferred |
-| SC-12 | Cryptographic Key Establishment and Management | **PARTIAL** | Env-based secrets; JWT key rotation **PLANNED**; buyer secret manager |
+| SC-12 | Cryptographic Key Establishment and Management | **PARTIAL** | Current/previous JWT secret rollover is implemented; operational rotation evidence and managed secret lifecycle remain deployment scope |
 | SC-13 | Cryptographic Protection | **PARTIAL** | bcrypt, JWT HS256, TLS; FIPS modules **PLANNED** |
 | SC-17 | Public Key Infrastructure Certificates | **PARTIAL** | Ingress certs (inherited); app-level PKI **PLANNED** for PIV |
 | SC-18 | Mobile Code | **PARTIAL** | CSP restricts script sources |
