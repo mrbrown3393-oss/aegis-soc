@@ -56,15 +56,18 @@ def _build_response(
     now = datetime.now(timezone.utc)
     nbf = (now - timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     noa = (not_on_or_after or (now + timedelta(minutes=5))).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Placeholder Signature node between Issuer and Subject (SAML schema location)
     xml = f"""<?xml version="1.0"?>
 <samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
                 xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
+                xmlns:ds="http://www.w3.org/2000/09/xmldsig#"
                 ID="_resp1" Version="2.0" IssueInstant="{nbf}"
                 Destination="{destination}" InResponseTo="{request_id}">
   <saml:Issuer>{issuer}</saml:Issuer>
   <samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>
   <saml:Assertion ID="{assertion_id}" Version="2.0" IssueInstant="{nbf}">
     <saml:Issuer>{issuer}</saml:Issuer>
+    <ds:Signature Id="placeholder"></ds:Signature>
     <saml:Subject>
       <saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">{email}</saml:NameID>
       <saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">
@@ -87,12 +90,15 @@ def _build_response(
     root = etree.fromstring(xml.encode("utf-8"))
     if sign:
         assertion = root.find("{urn:oasis:names:tc:SAML:2.0:assertion}Assertion")
-        signed = XMLSigner(method=etree.SignatureMethod.RSA_SHA256).sign(
-            assertion, key=key_pem, cert=cert_pem
-        )
-        # replace unsigned assertion with signed
+        signed_assertion = XMLSigner().sign(assertion, key=key_pem, cert=cert_pem)
         parent = assertion.getparent()
-        parent.replace(assertion, signed)
+        parent.replace(assertion, signed_assertion)
+    else:
+        # Remove placeholder so unsigned path is truly unsigned
+        assertion = root.find("{urn:oasis:names:tc:SAML:2.0:assertion}Assertion")
+        placeholder = assertion.find("{http://www.w3.org/2000/09/xmldsig#}Signature")
+        if placeholder is not None:
+            assertion.remove(placeholder)
     return base64.b64encode(etree.tostring(root)).decode("ascii")
 
 

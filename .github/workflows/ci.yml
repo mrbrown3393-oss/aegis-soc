@@ -21,9 +21,30 @@ jobs:
       - name: Start API
         run: |
           cd backend
-          export MONGO_URL=mongodb://localhost:27017 DB_NAME=aegis_test JWT_SECRET=test-secret-not-for-production ADMIN_EMAIL=admin@test.io ADMIN_PASSWORD=TestPass123! ANALYST_EMAIL=analyst@test.io ANALYST_PASSWORD=TestPass123! FRONTEND_URL=http://localhost:3000 CORS_ORIGINS=http://localhost:3000 MONGO_TLS=false MFA_REQUIRED=true MFA_MASTER_SECRET=test-mfa-master-secret-0123456789abcdef AEGIS_ENV=test
+          export MONGO_URL=mongodb://localhost:27017 \
+            DB_NAME=aegis_test \
+            JWT_SECRET=test-secret-not-for-production \
+            ADMIN_EMAIL=admin@test.io \
+            ADMIN_PASSWORD=TestPass123! \
+            ANALYST_EMAIL=analyst@test.io \
+            ANALYST_PASSWORD=TestPass123! \
+            FRONTEND_URL=http://localhost:3000 \
+            CORS_ORIGINS=http://localhost:3000 \
+            MONGO_TLS=false \
+            MFA_REQUIRED=true \
+            MFA_MASTER_SECRET=test-mfa-master-secret-0123456789abcdef \
+            AEGIS_ENV=test
           uvicorn server:app --host 127.0.0.1 --port 8001 > /tmp/uvicorn.log 2>&1 &
-          sleep 5
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8001/api/ >/dev/null; then
+              echo "API is up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "API failed to become ready"
+          cat /tmp/uvicorn.log || true
+          exit 1
       - name: Smoke test
         run: |
           curl -sf http://127.0.0.1:8001/api/ | grep -q ok
