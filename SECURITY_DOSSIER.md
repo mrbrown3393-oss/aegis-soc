@@ -1,8 +1,8 @@
 # Aegis SOC — Security & Compliance Dossier
 
-**Document version**: 1.1
-**Platform version**: v2.1.0
-**Prepared**: Q1 2026 · **Revised**: 2026-10-04
+**Document version**: 1.2
+**Platform version**: v2.2.0
+**Prepared**: Q1 2026 · **Revised**: 2026-10-05
 **Owner**: William Brown (`william.brown@aegis-soc.io`)
 **Classification**: UNCLASSIFIED — Shareable under NDA for buyer / investor / contracting diligence
 **Companion entry point**: `SECURITY.md` (consolidated summary). This dossier remains the detailed control mapping. `NIST_ALIGNMENT.md` remains the NIST 800-53 appendix.
@@ -78,7 +78,7 @@ NIST Cybersecurity Framework 2.0 (February 2024) organizes cybersecurity outcome
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| Identity management & authentication | **PARTIAL** | Password + bcrypt + JWT + TOTP MFA **IMPLEMENTED** (MFA required in production); full SSO (SAML/OIDC) endpoints exist but **fail closed** until provider validation is configured; WebAuthn/PIV **PLANNED**. See §3.1. |
+| Identity management & authentication | **PARTIAL** | Password + bcrypt + JWT + TOTP MFA **IMPLEMENTED** (MFA required in production); production SAML 2.0 and OIDC federation code with cryptographic/provider validation is **IMPLEMENTED**, but provider-specific deployment configuration remains customer-scoped; WebAuthn/PIV **PLANNED**. See §3.1. |
 | Access control | **IMPLEMENTED** | Server-side RBAC + tenant filtering. See §3.2. |
 | Data security | **PARTIAL** | TLS in transit **IMPLEMENTED**; MongoDB TLS client enforcement **IMPLEMENTED**; WiredTiger encryption-at-rest configuration **IMPLEMENTED** (`ops/mongodb/`) — buyer must provision keys. See §4.2 / §4.4. |
 | Platform security | **IMPLEMENTED** | Hardened defaults; input validation; secure cookies. |
@@ -191,8 +191,8 @@ Aegis is best described as a **"Device Agent / Gateway"-based ZTA** when deploye
 | Session revalidation on each request | **IMPLEMENTED** | `get_current_user` re-fetches user from Mongo and checks active session on every call |
 | Logout clears both cookies | **IMPLEMENTED** | `POST /api/auth/logout` + audit entry |
 | Session termination on logout / password change | **IMPLEMENTED** | Server-side `auth_sessions` with `revoke_session` / `revoke_user_sessions`; access tokens checked against active session on every request. |
-| Idle timeout (15 min for FedRAMP) | **PLANNED** | 1 PW |
-| JWT signing key rotation (two-active-keys pattern) | **PLANNED** | 2 PW |
+| Idle timeout (15 min for FedRAMP target) | **IMPLEMENTED** | Server-side session activity is checked and idle sessions are revoked after `IDLE_TIMEOUT_MINUTES=15`; regression coverage exists. |
+| JWT signing-key rollover support | **IMPLEMENTED** | Current + previous JWT secrets are supported and tested; operational secret-rotation procedure remains **PLANNED**. |
 | **Explicit non-claim** on XSS | **DOCUMENTED** | `httpOnly` prevents JavaScript from reading the token. A successful XSS could still make authenticated requests via the browser-attached cookie. XSS defense-in-depth (CSP, output encoding, no `dangerouslySetInnerHTML`, Pydantic validation) is applied in addition — not instead of. |
 
 ### 3.4 API Security
@@ -203,7 +203,7 @@ Aegis is best described as a **"Device Agent / Gateway"-based ZTA** when deploye
 | Pydantic v2 validation on all request bodies | **IMPLEMENTED** | `RegisterRequest`, `LoginRequest`, `IncidentUpdate`, `UserInvite` models |
 | Enumerated `Literal` types for status / severity / tenant | **IMPLEMENTED** | Prevents injection of unexpected values |
 | Structured FastAPI exception responses — no stack-trace leakage | **IMPLEMENTED** | — |
-| Rate limiting on authenticated endpoints | **PLANNED** | Add `slowapi` with per-user per-endpoint quotas. 1 PW |
+| Rate limiting on authenticated endpoints | **IMPLEMENTED** | Mongo-backed atomic authenticated request limit (`AUTH_RATE_LIMIT_PER_MINUTE=120`) with regression coverage. |
 | OpenAPI spec auto-generated | **IMPLEMENTED** | FastAPI `/docs` + `/openapi.json` |
 | API versioning strategy | **PARTIAL** | Current API is implicitly v1; formal versioning (`/api/v1/...`) **PLANNED** before public API publication |
 | Idempotency keys on mutating endpoints | **PLANNED** | For external integrations |
