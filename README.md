@@ -13,7 +13,7 @@
 
 ## Documentation
 
-The maintained documentation source is in **[docs/wiki/](docs/wiki/)**. It is prepared for publication in the [GitHub Wiki](https://github.com/mrbrown3393-oss/aegis-soc/wiki).
+The published documentation is available in the **[GitHub Wiki](https://github.com/mrbrown3393-oss/aegis-soc/wiki)**. The maintained source is in **[docs/wiki/](docs/wiki/)**.
 
 | Page | Purpose |
 | --- | --- |
@@ -28,7 +28,7 @@ The maintained documentation source is in **[docs/wiki/](docs/wiki/)**. It is pr
 
 The documentation reflects backend commit `2049bdeb`, reviewed October 5, 2026. The current React client and FastAPI backend have contract differences listed in Troubleshooting. Training records are synthetic. Publishing documentation does not establish runtime verification, a production deployment, or certification.
 
-The wiki uses a separate Git repository. Source edits do not automatically publish wiki pages; the prepared set includes `_Sidebar.md` and `_Footer.md`.
+The wiki uses a separate Git repository. Source edits do not automatically publish wiki pages. Navigation lives in `_Sidebar.md` and `_Footer.md`.
 
 ---
 
