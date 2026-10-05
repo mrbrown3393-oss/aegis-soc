@@ -7,7 +7,7 @@
 > production-shaped FastAPI backend described in `SECURITY_DOSSIER.md`.
 > The previous Node/Express build has been replaced.
 
-![Status](https://img.shields.io/badge/status-operational-10b981)![Version](https://img.shields.io/badge/version-2.1.0-22d3ee)![License](https://img.shields.io/badge/license-Commercial-f59e0b)![Owner](https://img.shields.io/badge/owner-William%20Brown-60a5fa)
+![Status](https://img.shields.io/badge/status-operational-10b981)![Version](https://img.shields.io/badge/version-2.2.0-22d3ee)![License](https://img.shields.io/badge/license-Commercial-f59e0b)![Owner](https://img.shields.io/badge/owner-William%20Brown-60a5fa)
 
 ---
 
@@ -180,7 +180,7 @@ All endpoints prefixed `/api`.
 Every record carries a `tenant` field (`government | private | saas`).
 - Non-privileged users (`analyst`, `viewer`) — backend auto-filters by their own tenant. No `?tenant=` override.
 - `owner` / `admin` — can filter freely with `?tenant=government|private|saas|all`.
-- Logical (query-time) isolation today; database-level isolation is the documented roadmap (see `SECURITY_DOSSIER.md` §5.5).
+- Logical (query-time) isolation today; database-level isolation remains a documented roadmap item (see `SECURITY_DOSSIER.md` §5.5).
 
 ## Seeded Demo Data
 
