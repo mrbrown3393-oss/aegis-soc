@@ -1,6 +1,6 @@
 # Aegis SOC — Evidence Catalog
 
-**Version**: 1.0 · **Effective**: 2026-10-04 · **Platform**: v2.1.0  
+**Version**: 1.0 · **Effective**: 2026-10-05 · **Platform**: v2.2.0  
 **Owner**: William Brown (`william.brown@aegis-soc.io`)  
 **Companion**: `SECURITY_DOSSIER.md` §9 · `SECURITY.md`
 
@@ -19,7 +19,7 @@ Authoritative map from **IMPLEMENTED** controls to source evidence after the bac
 | Session revalidation on each request | `backend/deps.py` → `get_current_user()` |
 | MFA (TOTP ±1 window) | `backend/auth_helpers.py` → `totp`, `verify_totp`; `backend/routers/auth.py` MFA routes |
 | Brute-force / MFA / reset lockouts | `backend/auth_helpers.py` lockout helpers; `backend/routers/auth.py` |
-| Authenticated endpoint rate limiting | `backend/auth_helpers.py` → `enforce_authenticated_rate_limit()`; Mongo-backed 120 requests/minute window |
+| Authenticated endpoint rate limiting | `backend/auth_helpers.py` → `enforce_authenticated_rate_limit()`; Mongo-backed atomic 120 requests/minute window |
 | Auth routes (register, login, logout, refresh, password reset) | `backend/routers/auth.py` |
 | RBAC | `backend/deps.py` → `require_role()` |
 | Tenant scoping | `backend/deps.py` → `tenant_filter()` |
@@ -27,7 +27,7 @@ Authoritative map from **IMPLEMENTED** controls to source evidence after the bac
 | CSRF origin guard | `backend/server.py` → `csrf_origin_guard` |
 | Production fail-closed gates | `backend/config.py` → `validate_security_settings()` |
 | Security headers | `backend/security_hardening.py` |
-| SSO fail-closed | `backend/sso.py` |
+| Production SAML/OIDC federation and fail-closed validation | `backend/sso.py`, `backend/config.py` |
 | Telemetry fusion / quarantine | `backend/anomaly.py` |
 | Indexes + demo seed | `backend/seed.py` |
 | App entrypoint / router wiring | `backend/server.py` |
