@@ -13,8 +13,7 @@ import jwt
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from lxml import etree
-from signxml import XMLVerifier
-from signxml.exceptions import InvalidSignature
+from signxml import InvalidSignature, XMLVerifier
 
 from auth_helpers import create_access_token, create_refresh_token, set_auth_cookies
 from session_security import create_bound_auth_session
@@ -208,14 +207,6 @@ def _text(node) -> str:
     return (node.text or "").strip() if node is not None else ""
 
 
-def _find(node, path: str):
-    return node.find(path, NS) if node is not None else None
-
-
-def _findall(node, path: str):
-    return node.findall(path, NS) if node is not None else []
-
-
 def _verify_saml_signature(xml_bytes: bytes, cert_pem: str) -> etree._Element:
     try:
         root = etree.fromstring(xml_bytes)
@@ -253,7 +244,6 @@ def _collect_attributes(assertion: etree._Element) -> dict[str, str]:
         ]
         if name and values:
             attrs[name] = values[0]
-            # also index by short name after last /
             short = name.rsplit("/", 1)[-1]
             attrs.setdefault(short, values[0])
     name_id = assertion.find(".//{urn:oasis:names:tc:SAML:2.0:assertion}NameID")
@@ -264,11 +254,7 @@ def _collect_attributes(assertion: etree._Element) -> dict[str, str]:
 
 
 def validate_saml_response(saml_response_b64: str, expected_request_id: str | None) -> dict:
-    """Validate a SAML Response and return identity attributes.
-
-    Enforces signature, issuer, audience, destination, recipient, time conditions,
-    InResponseTo correlation, and required subject attributes.
-    """
+    """Validate a SAML Response and return identity attributes."""
     if not _saml_configured():
         raise HTTPException(503, "SAML is not completely configured")
     if not saml_response_b64 or len(saml_response_b64) > 512_000:
@@ -282,10 +268,8 @@ def validate_saml_response(saml_response_b64: str, expected_request_id: str | No
     cert_pem = _normalize_x509_cert(settings.SAML_IDP_X509_CERT)
     signed_root = _verify_saml_signature(xml_bytes, cert_pem)
 
-    # Prefer protocol Response root when present
     response = signed_root
     if _local(signed_root.tag) != "Response":
-        # Assertion-only signed payload is acceptable if envelope checks still pass via parent parse
         try:
             full_root = etree.fromstring(xml_bytes)
         except etree.XMLSyntaxError as exc:
@@ -312,7 +296,6 @@ def validate_saml_response(saml_response_b64: str, expected_request_id: str | No
         if not in_response_to or not secrets.compare_digest(in_response_to, expected_request_id):
             raise HTTPException(401, "SAML InResponseTo correlation failed")
     elif in_response_to:
-        # Unsolicited responses are rejected when SP-initiated correlation is expected
         raise HTTPException(401, "Unsolicited SAML response rejected")
 
     assertion = _extract_assertion(signed_root if _local(signed_root.tag) == "Assertion" else response)
@@ -393,7 +376,7 @@ def _build_authn_request(request_id: str) -> str:
     )
     issuer = ET.SubElement(root, "{urn:oasis:names:tc:SAML:2.0:assertion}Issuer")
     issuer.text = settings.SAML_SP_ENTITY_ID.strip()
-    name_id_policy = ET.SubElement(
+    ET.SubElement(
         root,
         "{urn:oasis:names:tc:SAML:2.0:protocol}NameIDPolicy",
         {
@@ -401,7 +384,6 @@ def _build_authn_request(request_id: str) -> str:
             "AllowCreate": "true",
         },
     )
-    _ = name_id_policy
     xml = ET.tostring(root, encoding="utf-8", xml_declaration=True)
     return base64.b64encode(xml).decode("ascii")
 
@@ -552,7 +534,6 @@ async def saml_login():
     })
     saml_request = _build_authn_request(request_id)
     params = {"SAMLRequest": saml_request}
-    # RelayState is optional; omit to avoid open-redirect risk
     return RedirectResponse(f"{settings.SAML_IDP_SSO_URL.strip()}?{urlencode(params)}", status_code=302)
 
 
@@ -565,14 +546,6 @@ async def saml_acs(request: Request, SAMLResponse: str = Form(...)):
         )
 
     now = datetime.now(timezone.utc)
-    # Consume any matching pending request if InResponseTo will be present;
-    # validation below still enforces correlation when a request was issued.
-    # We look up after parsing would require two-pass; instead consume by scanning
-    # is avoided — validate_saml_response checks InResponseTo against a provided id.
-    # Strategy: decode just enough is expensive; instead find unused recent requests
-    # is not secure. We require InResponseTo and look it up atomically.
-
-    # First pass: decode XML enough to read InResponseTo without trusting content
     try:
         xml_bytes = base64.b64decode(SAMLResponse, validate=False)
         rough = etree.fromstring(xml_bytes)
@@ -592,7 +565,6 @@ async def saml_acs(request: Request, SAMLResponse: str = Form(...)):
 
     identity = validate_saml_response(SAMLResponse, expected_request_id=in_response_to)
 
-    # Replay protection on assertion ID
     replay = await db.sso_saml_assertions.find_one_and_update(
         {"assertion_id_hash": _sha256(identity["assertion_id"])},
         {
@@ -604,8 +576,6 @@ async def saml_acs(request: Request, SAMLResponse: str = Form(...)):
         },
         upsert=True,
     )
-    # find_one_and_update with upsert returns the doc before update when not ReturnDocument.AFTER;
-    # if a prior document existed, this is a replay.
     if replay is not None and replay.get("seen_at"):
         raise HTTPException(401, "SAML assertion replay detected")
 
