@@ -23,10 +23,20 @@ class Settings(BaseSettings):
     SSO_BASE_URL: str = "http://localhost:8001"
     SAML_ENABLED: bool = False
     OIDC_ENABLED: bool = False
+    SAML_SP_ENTITY_ID: str = ""
+    SAML_ACS_URL: str = ""
     SAML_IDP_METADATA_URL: str = ""
     SAML_IDP_ENTITY_ID: str = ""
     SAML_IDP_SSO_URL: str = ""
     SAML_IDP_X509_CERT: str = ""
+    SAML_SUCCESS_REDIRECT_URL: str = "http://localhost:3000"
+    SAML_TENANT_ATTRIBUTE: str = "tenant"
+    SAML_ROLE_ATTRIBUTE: str = "role"
+    SAML_EMAIL_ATTRIBUTE: str = "email"
+    SAML_NAME_ATTRIBUTE: str = "displayName"
+    SAML_ALLOWED_TENANTS: str = "private"
+    SAML_ALLOW_EMAIL_LINKING: bool = False
+    SAML_CLOCK_SKEW_SECONDS: int = 120
     OIDC_ISSUER_URL: str = ""
     OIDC_CLIENT_ID: str = ""
     OIDC_CLIENT_SECRET: str = ""
@@ -118,6 +128,28 @@ def validate_security_settings() -> None:
             raise RuntimeError("Production OIDC email linking must be explicitly reviewed before enablement.")
         if settings.OIDC_REQUIRE_MFA_CLAIM and not settings.OIDC_MFA_AMR_VALUES.strip():
             raise RuntimeError("Production OIDC MFA enforcement requires at least one allowed AMR value.")
+    if settings.SAML_ENABLED:
+        saml_required = {
+            "SAML_SP_ENTITY_ID": settings.SAML_SP_ENTITY_ID,
+            "SAML_ACS_URL": settings.SAML_ACS_URL,
+            "SAML_IDP_ENTITY_ID": settings.SAML_IDP_ENTITY_ID,
+            "SAML_IDP_SSO_URL": settings.SAML_IDP_SSO_URL,
+            "SAML_IDP_X509_CERT": settings.SAML_IDP_X509_CERT,
+        }
+        if any(not value.strip() for value in saml_required.values()):
+            raise RuntimeError(
+                "Production SAML requires SP entity ID, ACS URL, IdP entity ID, SSO URL, and IdP X.509 certificate."
+            )
+        if not settings.SAML_ACS_URL.lower().startswith("https://"):
+            raise RuntimeError("Production SAML_ACS_URL must use HTTPS.")
+        if not settings.SAML_IDP_SSO_URL.lower().startswith("https://"):
+            raise RuntimeError("Production SAML_IDP_SSO_URL must use HTTPS.")
+        if not settings.SAML_SUCCESS_REDIRECT_URL.lower().startswith("https://"):
+            raise RuntimeError("Production SAML_SUCCESS_REDIRECT_URL must use HTTPS.")
+        if not settings.SAML_ALLOWED_TENANTS.strip():
+            raise RuntimeError("Production SAML requires an explicit tenant allowlist.")
+        if settings.SAML_ALLOW_EMAIL_LINKING:
+            raise RuntimeError("Production SAML email linking must be explicitly reviewed before enablement.")
 
 
 def allowed_csrf_origins() -> set[str]:
