@@ -1,9 +1,9 @@
 # Aegis SOC — Security Documentation
 
-**Platform**: Aegis SOC v2.1.0  
+**Platform**: Aegis SOC v2.2.0  
 **Owner**: William Brown (`william.brown@aegis-soc.io`)  
 **Classification**: UNCLASSIFIED — shareable under NDA for buyer, investor, or contracting diligence  
-**Last updated**: 2026-10-04
+**Last updated**: 2026-10-05
 
 > This document is the consolidated entry point for Aegis SOC security documentation.
 > It summarizes the platform's security posture and points to the authoritative artifacts in this repository.
@@ -36,7 +36,7 @@ Aegis SOC is a modular, multi-tenant Security Operations Center platform unifyin
 - Account enumeration prevention: login always returns a generic "Invalid email or password."
 - Password reset uses single-use tokens with TTL expiry.
 - **MFA** (TOTP) is implemented and required when `MFA_REQUIRED=true`; production startup fails closed without `MFA_MASTER_SECRET`.
-- SSO (SAML 2.0 / OIDC) endpoints exist but **fail closed** (HTTP 503) until a complete provider integration with signature, audience, issuer, replay, and JWKS validation is configured. No unsigned SAML AuthnRequest is ever emitted.
+- Production SSO (SAML 2.0 / OIDC) is implemented with cryptographic/provider validation and tenant/role mapping; startup and runtime paths fail closed when required provider configuration is absent or invalid. SAML validates signatures, issuer, audience, destination/recipient, time conditions, request correlation, and assertion replay; OIDC validates issuer, audience, nonce, PKCE flow, JWKS signing keys, and optional MFA claims.
 
 ### Authorization & Tenancy
 - Server-side RBAC: `owner` (cross-tenant), `admin` (tenant admin), `analyst` (triage + patch), `viewer` (read-only). Enforced via `Depends(require_role(...))` on every privileged endpoint.
@@ -80,8 +80,8 @@ Aegis SOC is a modular, multi-tenant Security Operations Center platform unifyin
 2. **Tenant isolation is logical today.** Query-time scoping is deliberate for the prototype; database-level isolation is planned.
 3. **Compliance baselines are design targets.** No Aegis deployment has been formally audited or certified against FedRAMP, SOC 2, ISO 27001, PCI-DSS, HIPAA, or CMMC as of this document's date.
 4. **SSO is fail-closed by design** until provider-specific verification is configured.
-5. **Rate limiting** on authenticated endpoints is planned (e.g., `slowapi`).
-6. **Idle timeout** and **JWT signing-key rotation** (two-active-keys pattern) are planned.
+5. **Operational SSO provider configuration** remains deployment/customer scoped even though the SAML/OIDC validation code is implemented.
+6. **JWT signing-key rollover support** is implemented; the operational rotation procedure and evidence record remain planned.
 7. **Dual approval** on high-risk actions (separation of duties) is planned for FedRAMP-aligned deployments.
 
 ---
