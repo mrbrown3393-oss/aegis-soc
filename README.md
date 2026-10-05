@@ -11,19 +11,24 @@
 
 ---
 
-## Documentation (Wiki-style)
+## Documentation
 
-Full documentation lives in **`docs/wiki/`**:
+The maintained documentation source is in **[docs/wiki/](docs/wiki/)**. It is prepared for publication in the [GitHub Wiki](https://github.com/mrbrown3393-oss/aegis-soc/wiki).
 
-| Page | Link |
-|------|------|
-| **Home** | [docs/wiki/Home.md](docs/wiki/Home.md) |
-| **Getting Started** | [docs/wiki/Getting-Started.md](docs/wiki/Getting-Started.md) |
-| **Architecture** | [docs/wiki/Architecture.md](docs/wiki/Architecture.md) |
-| **API Reference** | [docs/wiki/API-Reference.md](docs/wiki/API-Reference.md) |
-| **Security** | [docs/wiki/Security.md](docs/wiki/Security.md) |
+| Page | Purpose |
+| --- | --- |
+| [Home](docs/wiki/Home.md) | Project overview and documentation index |
+| [Getting Started](docs/wiki/Getting-Started.md) | Local environment, ports, startup, and MFA sign-in |
+| [Architecture](docs/wiki/Architecture.md) | Current components and tenant boundaries |
+| [API Reference](docs/wiki/API-Reference.md) | Verified backend routes and request/response contracts |
+| [Security](docs/wiki/Security.md) | Implemented controls and evidence boundaries |
+| [Deployment](docs/wiki/Deployment.md) | Production configuration and release checks |
+| [Operations](docs/wiki/Operations.md) | Incident workflow and maintenance runbooks |
+| [Troubleshooting](docs/wiki/Troubleshooting.md) | Authentication errors and client/backend integration gaps |
 
-These pages are ready to copy into the official GitHub Wiki (`https://github.com/mrbrown3393-oss/aegis-soc/wiki`) whenever you want.
+The documentation reflects backend commit `2049bdeb`, reviewed October 5, 2026. The current React client and FastAPI backend have contract differences listed in Troubleshooting. Training records are synthetic. Publishing documentation does not establish runtime verification, a production deployment, or certification.
+
+The wiki uses a separate Git repository. Source edits do not automatically publish wiki pages; the prepared set includes `_Sidebar.md` and `_Footer.md`.
 
 ---
 

@@ -1,54 +1,44 @@
-# Aegis SOC Wiki
+# Aegis SOC
 
-> **A sovereign Security Operations Center platform — operated by signal.**  
-> Owned by **William Brown**. Ready to sell, rent, or license.
+Aegis SOC is William Brown's security operations platform. This wiki covers the FastAPI backend, MongoDB data store, React client, authentication, deployment, and operating procedures.
 
-**Stack:** FastAPI + MongoDB + React + Vite  
-**Version:** 2.2.0 · **License:** Commercial
+**Maintainer:** William Brown
 
----
+**API version:** 2.2.0
 
-## What Is Aegis SOC
+**Repository:** [mrbrown3393-oss/aegis-soc](https://github.com/mrbrown3393-oss/aegis-soc)
 
-Aegis SOC is a modular, enterprise cybersecurity platform that unifies:
+## Start here
 
-- Threat detection  
-- Incident response  
-- Vulnerability management  
-- Asset intelligence  
-- Continuous compliance  
-- Append-oriented audit  
+| Page | Use it for |
+| --- | --- |
+| [Getting Started](Getting-Started.md) | Local configuration, starting the API and client, and first sign-in |
+| [Architecture](Architecture.md) | Components, request flow, and tenant boundaries |
+| [API Reference](API-Reference.md) | Verified routes, authentication requirements, and response shapes |
+| [Security](Security.md) | MFA, sessions, access controls, and security evidence |
+| [Deployment](Deployment.md) | Production settings and deployment checks |
+| [Operations](Operations.md) | Incident workflow, backups, and maintenance runbooks |
+| [Troubleshooting](Troubleshooting.md) | Login failures, origin errors, and client/API integration gaps |
 
-…in a single multi-tenant console with three sovereign deployment postures.
+## Current implementation
 
-## Deployment Modes
+The backend contains APIs for threats, vulnerabilities, incident status updates, assets, compliance records, users, audit logs, telemetry fusion, and quarantine requests. The client lives in `client/` and uses React, TypeScript, and Vite.
 
-| Mode | Accent | Target Baseline | Best For |
-|------|--------|-----------------|----------|
-| **Government** | Navy / steel `#60a5fa` | FedRAMP Moderate · CMMC L2 · FIPS 140-3 · STIG | Federal, state/local, defense primes |
-| **Private Sector** | Warm amber `#f5b041` | SOC 2 · ISO 27001 · PCI-DSS 4.0 · HIPAA | Fortune 500, regulated industries |
-| **SaaS Platform** | Cyan `#22d3ee` | Multi-tenant · white-label · usage billing | MSSPs, security product companies |
+The tenant values are `government`, `private`, and `saas`. Only the `owner` role can query across tenants. Other roles are scoped to their own tenant by backend dependencies.
 
-## Feature Modules
+The first database startup seeds training records. Those threat, asset, vulnerability, and compliance records are synthetic; they are not findings from a real security scan. `GET /api/threats/live` also generates simulated telemetry. A quarantine request records a requested action in MongoDB; endpoint/network isolation needs an enforcement integration.
 
-1. **Overview** – Portfolio KPIs, 7-day trend, severity donut, live threat tape  
-2. **Threats** – Correlated SIEM-style events  
-3. **Vulnerabilities** – CVE catalog with CVSS + patch tracking  
-4. **Incidents** – Tickets with kill-chain phase & workflow  
-5. **Compliance** – NIST 800-53, ISO 27001, SOC 2, HIPAA, FedRAMP, PCI-DSS, CMMC L2  
-6. **Assets** – Endpoints, servers, firewalls, routers, DBs + risk score  
-7. **Users** – Operators & RBAC  
-8. **Audit Logs** – Append-oriented action trail + CSV export  
+The current client and backend have API-contract differences that must be resolved before an end-to-end deployment. The [Troubleshooting](Troubleshooting.md) page names the specific differences.
 
-## Quick Links
+## Project evidence
 
-- [Getting Started](Getting-Started.md)
-- [Architecture](Architecture.md)
-- [API Reference](API-Reference.md)
-- [Security](Security.md)
-- [Main README](https://github.com/mrbrown3393-oss/aegis-soc)
-- [SECURITY_DOSSIER.md](https://github.com/mrbrown3393-oss/aegis-soc/blob/main/SECURITY_DOSSIER.md)
+Use the running code and current tests to assess a release. Some older repository documents describe earlier versions.
 
----
+- [Security evidence catalog](https://github.com/mrbrown3393-oss/aegis-soc/blob/main/docs/EVIDENCE_CATALOG.md)
+- [Security documentation errata](https://github.com/mrbrown3393-oss/aegis-soc/blob/main/SECURITY_ERRATA.md)
+- [Security policy](https://github.com/mrbrown3393-oss/aegis-soc/blob/main/SECURITY.md)
+- [Operations pack](https://github.com/mrbrown3393-oss/aegis-soc/blob/main/docs/ops/README.md)
 
-© 2026 Aegis SOC · All rights reserved · Transferable commercial license available
+Compliance documents describe design targets and supporting evidence. They do not establish FedRAMP authorization or SOC 2, ISO 27001, or CMMC certification.
+
+**Documentation basis:** main-branch commit [2049bdeb](https://github.com/mrbrown3393-oss/aegis-soc/commit/2049bdeb8a96e8f91d3ca55d4534096650f813e2), reviewed October 5, 2026. This documentation update does not represent a new runtime test or deployment.
