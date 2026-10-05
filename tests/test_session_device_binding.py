@@ -38,7 +38,8 @@ def test_password_login_and_mfa_use_bound_session_algorithm():
         assert ast.unparse(call.args[1]) == "request"
 
 
-def test_oidc_uses_bound_session_algorithm():
+def test_oidc_and_saml_use_bound_session_algorithm():
+    """Both federated login paths must bind sessions to the request device context."""
     source = _source("backend/sso.py")
     tree = ast.parse(source)
     calls = [
@@ -47,6 +48,8 @@ def test_oidc_uses_bound_session_algorithm():
         and isinstance(node.func, ast.Name)
         and node.func.id == "create_bound_auth_session"
     ]
-    assert len(calls) == 1
-    assert len(calls[0].args) == 2
-    assert ast.unparse(calls[0].args[1]) == "request"
+    # OIDC callback + SAML ACS
+    assert len(calls) == 2
+    for call in calls:
+        assert len(call.args) == 2
+        assert ast.unparse(call.args[1]) == "request"
