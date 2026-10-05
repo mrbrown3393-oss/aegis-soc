@@ -11,6 +11,22 @@
 
 ---
 
+## Documentation (Wiki-style)
+
+Full documentation lives in **`docs/wiki/`**:
+
+| Page | Link |
+|------|------|
+| **Home** | [docs/wiki/Home.md](docs/wiki/Home.md) |
+| **Getting Started** | [docs/wiki/Getting-Started.md](docs/wiki/Getting-Started.md) |
+| **Architecture** | [docs/wiki/Architecture.md](docs/wiki/Architecture.md) |
+| **API Reference** | [docs/wiki/API-Reference.md](docs/wiki/API-Reference.md) |
+| **Security** | [docs/wiki/Security.md](docs/wiki/Security.md) |
+
+These pages are ready to copy into the official GitHub Wiki (`https://github.com/mrbrown3393-oss/aegis-soc/wiki`) whenever you want.
+
+---
+
 ## What Is Aegis SOC
 
 Aegis SOC is a modular, enterprise cybersecurity platform that unifies threat detection, incident response, vulnerability management, asset intelligence, continuous compliance, and append-oriented audit — in a single multi-tenant console with three sovereign deployment postures: **Government**, **Private Sector**, and **SaaS**.
@@ -94,6 +110,8 @@ React 19 Frontend (Vite)  --axios, httpOnly JWT cookies-->  FastAPI Backend (/ap
 │   ├── requirements.txt
 │   └── .env.example
 ├── frontend/                  # React 19 (CRA) — see README in BS Code env
+├── docs/
+│   └── wiki/                  # Wiki-style documentation (Home, Getting Started, etc.)
 ├── memory/
 └── README.md                  # ← you are here
 ```
