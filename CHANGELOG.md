@@ -18,8 +18,8 @@
 - Dependabot major frontend bumps deferred (TypeScript 7, Tailwind 4, Recharts 3, lucide 1, plugin-react 6)
 
 ### Dependencies
-- `lxml==6.0.2`
-- `signxml==4.2.0`
+- `lxml==6.1.3`
+- `signxml==4.4.0`
 
 ## v2.1.0
 
