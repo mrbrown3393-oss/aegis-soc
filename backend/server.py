@@ -11,6 +11,7 @@ Security posture:
 - Audit trail with request correlation IDs
 - Pydantic v2 validation and parameterized MongoDB queries
 - Secrets loaded from environment only
+- Production OIDC and SAML federation with cryptographic validation
 
 Honest non-claims:
 - httpOnly does not make the application XSS-immune.
@@ -37,7 +38,7 @@ validate_security_settings()
 
 app = FastAPI(
     title="Aegis SOC API",
-    version="2.1.0",
+    version="2.2.0",
     docs_url="/docs" if settings.AEGIS_ENV.lower() != "production" else None,
     redoc_url="/redoc" if settings.AEGIS_ENV.lower() != "production" else None,
 )
