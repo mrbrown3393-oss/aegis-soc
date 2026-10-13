@@ -78,7 +78,7 @@ NIST Cybersecurity Framework 2.0 (February 2024) organizes cybersecurity outcome
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| Identity management & authentication | **PARTIAL** | Password + bcrypt + JWT + TOTP MFA **IMPLEMENTED** (MFA required in production); production SAML 2.0 and OIDC federation code with cryptographic/provider validation is **IMPLEMENTED**, but provider-specific deployment configuration remains customer-scoped; WebAuthn/PIV **PLANNED**. See §3.1. |
+| Identity management & authentication | **PARTIAL** | Password + bcrypt + JWT + TOTP MFA **IMPLEMENTED** (MFA required in production). OIDC authorization-code flow and SAML ACS validation code are present, but provider-specific end-to-end and adversarial integration evidence is not yet established; do not advertise either flow as production-validated. WebAuthn/PIV **PLANNED**. See §3.1. |
 | Access control | **IMPLEMENTED** | Server-side RBAC + tenant filtering. See §3.2. |
 | Data security | **PARTIAL** | TLS in transit **IMPLEMENTED**; MongoDB TLS client enforcement **IMPLEMENTED**; WiredTiger encryption-at-rest configuration **IMPLEMENTED** (`ops/mongodb/`) — buyer must provision keys. See §4.2 / §4.4. |
 | Platform security | **IMPLEMENTED** | Hardened defaults; input validation; secure cookies. |
@@ -166,7 +166,7 @@ Aegis is best described as a **"Device Agent / Gateway"-based ZTA** when deploye
 | Account enumeration prevention | **IMPLEMENTED** | Login always returns generic "Invalid email or password" |
 | Brute-force lockout (5 attempts → 15 min) | **IMPLEMENTED** | Logic in login path; client IP via `forwarded_client_ip()` using `X-Forwarded-For` only when peer is in `TRUSTED_PROXY_IPS`. Configure trusted proxies in production. |
 | Multi-factor authentication (TOTP) | **IMPLEMENTED** | TOTP with ±1 step window; MFA pending cookie; `MFA_REQUIRED=true` enforced in production via `validate_security_settings()`. WebAuthn **PLANNED**. |
-| SSO (SAML + OIDC — Okta, Azure AD, Google Workspace) | **PARTIAL** | Routes in `backend/sso.py` with configuration surface; all login/callback/ACS paths **fail closed** (HTTP 503) until signed requests, assertion validation, JWKS, and tenant mapping are configured. Full integration **PLANNED** — 3 PW. |
+| SSO (SAML + OIDC — provider-specific) | **PARTIAL** | Routes in `backend/sso.py` implement OIDC authorization-code + PKCE, one-time state/nonce, JWKS-backed ID-token validation, tenant allowlists and session/audit issuance; SAML ACS includes signature, issuer/audience/time, request-correlation and assertion-replay checks. Provider-specific end-to-end and adversarial integration tests/evidence remain **PLANNED**; route presence is not proof of production validation. |
 | PIV / smart card | **PLANNED** | Required for federal civilian agencies. 4 PW |
 
 ### 3.2 Authorization / RBAC
