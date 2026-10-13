@@ -84,3 +84,50 @@ def test_oidc_mfa_claim_is_required_when_enabled(monkeypatch):
     with pytest.raises(Exception) as exc:
         _verify_id_token(token, {"keys": [{"kid": "test-key", **public_jwk}]}, "correct")
     assert getattr(exc.value, "status_code", None) == 403
+
+
+
+@pytest.mark.parametrize(
+    "extra_claims",
+    [
+        {"aud": ["client", "other"]},
+        {"aud": ["client", "other"], "azp": "other"},
+        {"aud": "client", "azp": "other"},
+    ],
+)
+def test_oidc_rejects_missing_or_mismatched_authorized_party(monkeypatch, extra_claims):
+    from cryptography.hazmat.primitives import serialization
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    private_pem = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    issuer = "https://issuer.example"
+    client_id = "client"
+    claims = {
+        "iss": issuer,
+        "sub": "user-1",
+        "aud": client_id,
+        "iat": 1700000000,
+        "exp": 4102444800,
+        "nonce": "correct",
+        "amr": ["mfa"],
+    }
+    claims.update(extra_claims)
+    token = jwt.encode(
+        claims,
+        private_pem,
+        algorithm="RS256",
+        headers={"kid": "test-key"},
+    )
+    public_jwk = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(key.public_key()))
+    monkeypatch.setattr(settings, "OIDC_ISSUER_URL", issuer)
+    monkeypatch.setattr(settings, "OIDC_CLIENT_ID", client_id)
+    monkeypatch.setattr(settings, "OIDC_REQUIRE_MFA_CLAIM", True)
+    monkeypatch.setattr(settings, "OIDC_MFA_AMR_VALUES", "mfa")
+
+    with pytest.raises(Exception) as exc:
+        _verify_id_token(token, {"keys": [{"kid": "test-key", **public_jwk}]}, "correct")
+    assert getattr(exc.value, "status_code", None) == 401

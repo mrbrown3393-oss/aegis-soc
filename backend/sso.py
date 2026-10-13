@@ -137,6 +137,16 @@ def _verify_id_token(token: str, jwks: dict, nonce: str) -> dict:
     except (jwt.InvalidTokenError, ValueError, KeyError):
         raise HTTPException(401, "OIDC ID token validation failed")
 
+    # OIDC Core requires azp when an ID token has multiple audiences and
+    # requires any supplied azp to identify this client. Audience validation
+    # alone is insufficient for multi-audience tokens.
+    audience = claims.get("aud")
+    azp = claims.get("azp")
+    if isinstance(audience, list) and len(audience) > 1 and not azp:
+        raise HTTPException(401, "OIDC authorized-party claim is required")
+    if azp is not None and not secrets.compare_digest(str(azp), settings.OIDC_CLIENT_ID):
+        raise HTTPException(401, "OIDC authorized-party claim mismatch")
+
     if not secrets.compare_digest(str(claims.get("nonce", "")), nonce):
         raise HTTPException(401, "OIDC nonce validation failed")
     if settings.OIDC_REQUIRE_MFA_CLAIM:
