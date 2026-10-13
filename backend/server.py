@@ -11,7 +11,7 @@ Security posture:
 - Audit trail with request correlation IDs
 - Pydantic v2 validation and parameterized MongoDB queries
 - Secrets loaded from environment only
-- Production OIDC and SAML federation with cryptographic validation
+- OIDC and SAML routes are present; production callbacks must be verified before federation is advertised as available
 
 Honest non-claims:
 - httpOnly does not make the application XSS-immune.
@@ -42,6 +42,16 @@ app = FastAPI(
     docs_url="/docs" if settings.AEGIS_ENV.lower() != "production" else None,
     redoc_url="/redoc" if settings.AEGIS_ENV.lower() != "production" else None,
 )
+
+
+@app.get("/api/", tags=["health"])
+async def api_health():
+    """Minimal liveness endpoint used by deployment smoke checks.
+
+    This confirms the API process is responding; it does not assert that MongoDB
+    or other external dependencies are healthy.
+    """
+    return {"status": "ok"}
 
 
 @app.middleware("http")
