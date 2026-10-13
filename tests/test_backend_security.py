@@ -767,3 +767,12 @@ def test_owner_can_delete_cross_tenant_non_owner(monkeypatch):
 
     assert fake.users.find_filters == [{"id": "private-user"}]
     assert fake.users.delete_filters == [{"id": "private-user"}]
+
+
+def test_api_health_endpoint_is_public_and_returns_liveness_status():
+    from fastapi.testclient import TestClient
+
+    response = TestClient(_aegis_app()).get("/api/")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
