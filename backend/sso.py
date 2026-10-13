@@ -286,20 +286,18 @@ def validate_saml_response(saml_response_b64: str, expected_request_id: str | No
             raise HTTPException(401, "Invalid SAML XML") from exc
         response = full_root if _local(full_root.tag) == "Response" else signed_root
 
-    status_code = response.find(".//{urn:oasis:names:tc:SAML:2.0:protocol}StatusCode")
-    if status_code is not None:
-        value = status_code.get("Value", "")
-        if value and not value.endswith("Success"):
-            raise HTTPException(401, "SAML authentication was not successful")
+    status_code = response.find("./{urn:oasis:names:tc:SAML:2.0:protocol}Status/{urn:oasis:names:tc:SAML:2.0:protocol}StatusCode")
+    if status_code is None or status_code.get("Value") != "urn:oasis:names:tc:SAML:2.0:status:Success":
+        raise HTTPException(401, "SAML authentication was not successful")
 
-    issuer = response.find(".//{urn:oasis:names:tc:SAML:2.0:assertion}Issuer")
+    issuer = response.find("./{urn:oasis:names:tc:SAML:2.0:assertion}Issuer")
     issuer_text = _text(issuer)
-    if not secrets.compare_digest(issuer_text, settings.SAML_IDP_ENTITY_ID.strip()):
-        raise HTTPException(401, "SAML issuer mismatch")
+    if not issuer_text or not secrets.compare_digest(issuer_text, settings.SAML_IDP_ENTITY_ID.strip()):
+        raise HTTPException(401, "SAML response issuer mismatch")
 
     destination = response.get("Destination") or ""
-    if destination and not secrets.compare_digest(destination.rstrip("/"), settings.SAML_ACS_URL.strip().rstrip("/")):
-        raise HTTPException(401, "SAML destination mismatch")
+    if not destination or not secrets.compare_digest(destination.rstrip("/"), settings.SAML_ACS_URL.strip().rstrip("/")):
+        raise HTTPException(401, "SAML destination missing or mismatched")
 
     in_response_to = response.get("InResponseTo") or ""
     if expected_request_id:
@@ -313,44 +311,50 @@ def validate_saml_response(saml_response_b64: str, expected_request_id: str | No
     if not assertion_id or len(assertion_id) > 256:
         raise HTTPException(401, "SAML assertion is missing a valid ID")
 
-    assertion_issuer = assertion.find("{urn:oasis:names:tc:SAML:2.0:assertion}Issuer")
-    if assertion_issuer is not None:
-        if not secrets.compare_digest(_text(assertion_issuer), settings.SAML_IDP_ENTITY_ID.strip()):
-            raise HTTPException(401, "SAML assertion issuer mismatch")
+    assertion_issuer = assertion.find("./{urn:oasis:names:tc:SAML:2.0:assertion}Issuer")
+    if assertion_issuer is None or not secrets.compare_digest(
+        _text(assertion_issuer), settings.SAML_IDP_ENTITY_ID.strip()
+    ):
+        raise HTTPException(401, "SAML assertion issuer missing or mismatched")
 
-    conditions = assertion.find("{urn:oasis:names:tc:SAML:2.0:assertion}Conditions")
+    conditions = assertion.find("./{urn:oasis:names:tc:SAML:2.0:assertion}Conditions")
+    if conditions is None:
+        raise HTTPException(401, "SAML assertion conditions are missing")
     now = datetime.now(timezone.utc)
     skew = timedelta(seconds=max(0, settings.SAML_CLOCK_SKEW_SECONDS))
-    if conditions is not None:
-        not_before = _parse_xml_time(conditions.get("NotBefore"))
-        not_on_or_after = _parse_xml_time(conditions.get("NotOnOrAfter"))
-        if not_before and now + skew < not_before:
-            raise HTTPException(401, "SAML assertion is not yet valid")
-        if not_on_or_after and now - skew >= not_on_or_after:
-            raise HTTPException(401, "SAML assertion has expired")
+    not_before = _parse_xml_time(conditions.get("NotBefore"))
+    not_on_or_after = _parse_xml_time(conditions.get("NotOnOrAfter"))
+    if not_on_or_after is None:
+        raise HTTPException(401, "SAML assertion expiry is missing")
+    if not_before and now + skew < not_before:
+        raise HTTPException(401, "SAML assertion is not yet valid")
+    if now - skew >= not_on_or_after:
+        raise HTTPException(401, "SAML assertion has expired")
 
-        audiences = [
-            _text(a)
-            for a in conditions.findall(".//{urn:oasis:names:tc:SAML:2.0:assertion}Audience")
-            if _text(a)
-        ]
-        if audiences and settings.SAML_SP_ENTITY_ID.strip() not in audiences:
-            raise HTTPException(401, "SAML audience mismatch")
+    audiences = [
+        _text(a)
+        for a in conditions.findall(".//{urn:oasis:names:tc:SAML:2.0:assertion}Audience")
+        if _text(a)
+    ]
+    if settings.SAML_SP_ENTITY_ID.strip() not in audiences:
+        raise HTTPException(401, "SAML audience missing or mismatched")
 
     subject_conf = assertion.find(".//{urn:oasis:names:tc:SAML:2.0:assertion}SubjectConfirmationData")
-    if subject_conf is not None:
-        recipient = subject_conf.get("Recipient") or ""
-        if recipient and not secrets.compare_digest(
-            recipient.rstrip("/"), settings.SAML_ACS_URL.strip().rstrip("/")
-        ):
-            raise HTTPException(401, "SAML recipient mismatch")
-        conf_not_on_or_after = _parse_xml_time(subject_conf.get("NotOnOrAfter"))
-        if conf_not_on_or_after and now - skew >= conf_not_on_or_after:
-            raise HTTPException(401, "SAML subject confirmation has expired")
-        conf_in_response_to = subject_conf.get("InResponseTo") or ""
-        if expected_request_id and conf_in_response_to:
-            if not secrets.compare_digest(conf_in_response_to, expected_request_id):
-                raise HTTPException(401, "SAML subject InResponseTo mismatch")
+    if subject_conf is None:
+        raise HTTPException(401, "SAML subject confirmation data is missing")
+    recipient = subject_conf.get("Recipient") or ""
+    if not recipient or not secrets.compare_digest(
+        recipient.rstrip("/"), settings.SAML_ACS_URL.strip().rstrip("/")
+    ):
+        raise HTTPException(401, "SAML recipient missing or mismatched")
+    conf_not_on_or_after = _parse_xml_time(subject_conf.get("NotOnOrAfter"))
+    if conf_not_on_or_after is None or now - skew >= conf_not_on_or_after:
+        raise HTTPException(401, "SAML subject confirmation expiry missing or expired")
+    conf_in_response_to = subject_conf.get("InResponseTo") or ""
+    if not expected_request_id or not conf_in_response_to or not secrets.compare_digest(
+        conf_in_response_to, expected_request_id
+    ):
+        raise HTTPException(401, "SAML subject InResponseTo correlation failed")
 
     attrs = _collect_attributes(assertion)
     email = str(attrs.get(settings.SAML_EMAIL_ATTRIBUTE) or attrs.get("email") or attrs.get("NameID") or "").strip().lower()
