@@ -109,16 +109,18 @@ React 19 Frontend (Vite)  --axios, httpOnly JWT cookies-->  FastAPI Backend (/ap
 ## Repository Layout
 
 ```
-/app
-├── backend/
-│   ├── server.py              # All routes, auth, seeder (~850 LOC)
+/
+├── backend/                   # FastAPI application and Python dependencies
+│   ├── server.py              # API entry point
+│   ├── routers/               # Auth, metrics, threats, incidents, assets, users
 │   ├── requirements.txt
 │   └── .env.example
-├── frontend/                  # React 19 (CRA) — see README in BS Code env
+├── client/                    # React 19 + TypeScript + Vite application
+├── tests/                     # Backend security and behavior tests
 ├── docs/
-│   └── wiki/                  # Wiki-style documentation (Home, Getting Started, etc.)
-├── memory/
-└── README.md                  # ← you are here
+│   └── wiki/                  # Maintained documentation source
+├── .github/workflows/         # CI and security automation
+└── README.md
 ```
 
 ## Getting Started
