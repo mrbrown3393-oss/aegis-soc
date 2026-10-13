@@ -1,7 +1,7 @@
 # Aegis SOC
 
 > **A sovereign Security Operations Center platform — operated by signal.**
-> Owned by **William Brown**. Ready to sell, rent, or license.
+> Commercial sale, rental, or licensing is available by written agreement. See [Commercial Licensing](COMMERCIAL-LICENSING.md).
 >
 > **Stack: FastAPI + MongoDB + React + Vite.** This repository contains the
 > production-shaped FastAPI backend described in `SECURITY_DOSSIER.md`.
@@ -25,6 +25,7 @@ The published documentation is available in the **[GitHub Wiki](https://github.c
 | [Deployment](docs/wiki/Deployment.md) | Production configuration and release checks |
 | [Operations](docs/wiki/Operations.md) | Incident workflow and maintenance runbooks |
 | [Troubleshooting](docs/wiki/Troubleshooting.md) | Authentication errors and client/backend integration gaps |
+| [Commercial Licensing](COMMERCIAL-LICENSING.md) | Licensing status and buyer due-diligence expectations |
 
 The documentation reflects backend commit `2049bdeb`, reviewed October 5, 2026. The current React client and FastAPI backend have contract differences listed in Troubleshooting. Training records are synthetic. Publishing documentation does not establish runtime verification, a production deployment, or certification.
 
