@@ -37,7 +37,9 @@ jobs:
 
       - name: Install client dependencies
         working-directory: client
-        run: npm install --ignore-scripts --no-audit --no-fund
+        run: |
+          npm cache clean --force
+          npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Generate Node SBOM
         working-directory: client
