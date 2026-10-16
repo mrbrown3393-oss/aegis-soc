@@ -131,3 +131,50 @@ def test_oidc_rejects_missing_or_mismatched_authorized_party(monkeypatch, extra_
     with pytest.raises(Exception) as exc:
         _verify_id_token(token, {"keys": [{"kid": "test-key", **public_jwk}]}, "correct")
     assert getattr(exc.value, "status_code", None) == 401
+
+
+
+@pytest.mark.parametrize(
+    "assertion_security_xml",
+    [
+        "<saml:AttributeStatement/>",
+        '<saml:Conditions NotOnOrAfter="2099-01-01T00:00:00Z"><saml:AudienceRestriction/></saml:Conditions>',
+        '<saml:Conditions NotOnOrAfter="2099-01-01T00:00:00Z"><saml:AudienceRestriction><saml:Audience>wrong-sp</saml:Audience></saml:AudienceRestriction></saml:Conditions>',
+        '<saml:Conditions NotOnOrAfter="2099-01-01T00:00:00Z"><saml:AudienceRestriction><saml:Audience>https://sp.example/entity</saml:Audience></saml:AudienceRestriction></saml:Conditions><saml:Subject><saml:NameID>user@example.com</saml:NameID></saml:Subject>',
+    ],
+)
+def test_saml_rejects_missing_or_invalid_required_assertion_controls(monkeypatch, assertion_security_xml):
+    import base64
+    from lxml import etree
+    from fastapi import HTTPException
+    import sso
+    validate_saml_response = sso.validate_saml_response
+
+    monkeypatch.setattr(sso.settings, "SAML_ENABLED", True)
+    monkeypatch.setattr(sso.settings, "SAML_SP_ENTITY_ID", "https://sp.example/entity")
+    monkeypatch.setattr(sso.settings, "SAML_ACS_URL", "https://sp.example/acs")
+    monkeypatch.setattr(sso.settings, "SAML_IDP_ENTITY_ID", "https://idp.example/entity")
+    monkeypatch.setattr(sso.settings, "SAML_IDP_SSO_URL", "https://idp.example/login")
+    monkeypatch.setattr(sso.settings, "SAML_IDP_X509_CERT", "test-certificate")
+    monkeypatch.setattr(sso.settings, "SAML_ALLOWED_TENANTS", "private")
+    monkeypatch.setattr(sso.settings, "SAML_CLOCK_SKEW_SECONDS", 0)
+    monkeypatch.setattr(sso.settings, "SAML_EMAIL_ATTRIBUTE", "email")
+    monkeypatch.setattr(sso.settings, "SAML_TENANT_ATTRIBUTE", "tenant")
+    monkeypatch.setattr(sso.settings, "SAML_ROLE_ATTRIBUTE", "role")
+    monkeypatch.setattr(sso.settings, "SAML_NAME_ATTRIBUTE", "displayName")
+
+    xml = f'''<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
+        xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
+        Destination="https://sp.example/acs" InResponseTo="_request">
+        <saml:Issuer>https://idp.example/entity</saml:Issuer>
+        <samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>
+        <saml:Assertion ID="_assertion">
+            <saml:Issuer>https://idp.example/entity</saml:Issuer>
+            {assertion_security_xml}
+        </saml:Assertion>
+    </samlp:Response>'''.encode()
+
+    monkeypatch.setattr("sso._verify_saml_signature", lambda _xml, _cert: etree.fromstring(_xml))
+    with pytest.raises(HTTPException) as exc:
+        validate_saml_response(base64.b64encode(xml).decode(), expected_request_id="_request")
+    assert exc.value.status_code == 401
