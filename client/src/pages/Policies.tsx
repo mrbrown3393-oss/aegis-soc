@@ -14,8 +14,8 @@ export default function Policies() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-semibold">Policy Enforcement</h1>
-        <p className="text-sm text-slate-500">Zero-trust and compliance policy posture</p>
+        <h1 className="text-xl font-semibold">Compliance Posture</h1>
+        <p className="text-sm text-slate-500">Stored framework scores and control coverage. These records are not a certification.</p>
       </div>
       <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
         {list.map(p => (
