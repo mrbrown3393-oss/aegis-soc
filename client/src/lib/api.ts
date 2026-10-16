@@ -160,15 +160,26 @@ export const assets = {
     }));
     return { data, total: data.length };
   },
-  identities: () => api<{ data: import('../types').Identity[]; total: number }>('/assets/identities'),
-  credentials: () => api<{ data: unknown[]; total: number }>('/assets/credentials'),
-  policies: () => api<{ data: unknown[]; total: number }>('/assets/policies')
+  identities: async () => {
+    const rows = await api<Record<string, unknown>[]>('/users');
+    const data: import('../types').Identity[] = rows.map(u => ({
+      id: String(u.id ?? ''), principal: String(u.email ?? ''), type: 'user', provider: 'Aegis SOC',
+      riskScore: 0, mfa: Boolean(u.mfaEnrolledAt), lastAuth: String(u.last_login ?? ''),
+      devices: 0, privileges: String(u.role ?? 'viewer'), anomalies: 0
+    }));
+    return { data, total: data.length };
+  },
+  credentials: async () => { throw new Error('Credential inventory is not available in the current backend API.'); },
+  policies: async () => {
+    const data = await api<unknown[]>('/compliance');
+    return { data, total: data.length };
+  }
 };
 
 export const threat = {
-  intel: () => api<{ data: unknown[]; total: number }>('/threat/intel'),
-  events: (limit = 50) => api<{ data: unknown[]; total: number }>(`/threat/events?limit=${limit}`),
-  audit: (limit = 50) => api<{ data: unknown[]; total: number }>(`/threat/audit?limit=${limit}`)
+  intel: async () => { const data = await api<unknown[]>('/threats?limit=100'); return { data, total: data.length }; },
+  events: async (limit = 50) => { const data = await api<unknown[]>(`/threats?limit=${Math.min(100, Math.max(1, limit))}`); return { data, total: data.length }; },
+  audit: async (limit = 50) => { const data = await api<unknown[]>(`/audit-logs?limit=${Math.min(200, Math.max(1, limit))}`); return { data, total: data.length }; }
 };
 
 export const ai = {
