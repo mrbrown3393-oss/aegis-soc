@@ -42,7 +42,6 @@ export const dashboard = {
       api<Record<string, unknown>[]>('/assets'),
       api<Record<string, unknown>[]>('/threats?limit=100')
     ]);
-    const criticalIncidents = incidents.filter(i => String(i.severity).toLowerCase() === 'critical');
     const activeIncidents = incidents.filter(i => String(i.status).toLowerCase() !== 'resolved').map(i => ({
       id: String(i.id ?? ''),
       title: String(i.title ?? 'Untitled incident'),
@@ -99,9 +98,24 @@ export const dashboard = {
 };
 
 export const alerts = {
-  list: (params?: Record<string, string>) => {
-    const q = params ? '?' + new URLSearchParams(params).toString() : '';
-    return api<{ data: import('../types').Alert[]; total: number }>(`/alerts${q}`);
+  list: async (params?: Record<string, string>) => {
+    const query = new URLSearchParams({ limit: '100', ...(params ?? {}) }).toString();
+    const rows = await api<Record<string, unknown>[]>(`/threats?${query}`);
+    const data: import('../types').Alert[] = rows.map(t => ({
+      id: String(t.id ?? ''),
+      title: String(t.title ?? 'Untitled threat'),
+      severity: String(t.severity ?? 'low') as import('../types').Alert['severity'],
+      status: 'open',
+      source: String(t.source_ip ?? ''),
+      category: 'threat',
+      assetId: String(t.affected_asset ?? ''),
+      riskScore: Number(t.confidence ?? 0),
+      createdAt: String(t.timestamp ?? ''),
+      updatedAt: String(t.timestamp ?? ''),
+      assignee: null,
+      description: String(t.description ?? '')
+    }));
+    return { data, total: data.length };
   },
   update: (id: string, body: Partial<import('../types').Alert>) =>
     api(`/alerts/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
