@@ -169,14 +169,23 @@ export const assets = {
     const rows = await api<Record<string, unknown>[]>('/users');
     const data: import('../types').Identity[] = rows.map(u => ({
       id: String(u.id ?? ''), principal: String(u.email ?? ''), type: 'user', provider: 'Aegis SOC',
-      riskScore: 0, mfa: Boolean(u.mfaEnrolledAt), lastAuth: String(u.last_login ?? ''),
+      riskScore: 0, mfa: Boolean(u.mfaEnrolledAt), lastAuth: String(u.last_login ?? u.created_at ?? ''),
       devices: 0, privileges: String(u.role ?? 'viewer'), anomalies: 0
     }));
     return { data, total: data.length };
   },
   credentials: async (): Promise<{ data: unknown[]; total: number }> => { throw new Error('Credential inventory is not available in the current backend API.'); },
   policies: async () => {
-    const data = await api<unknown[]>('/compliance');
+    const rows = await api<Record<string, unknown>[]>('/compliance');
+    const data = rows.map(p => ({
+      id: String(p.id ?? ''),
+      name: String(p.framework ?? 'Unknown framework'),
+      category: 'compliance',
+      status: Number(p.score ?? 0) >= 80 ? 'reviewed' : 'needs review',
+      coverage: Number(p.score ?? 0),
+      violations: Math.max(0, Number(p.controls_total ?? 0) - Number(p.controls_passing ?? 0)),
+      lastEval: String(p.last_assessed ?? '')
+    }));
     return { data, total: data.length };
   }
 };
