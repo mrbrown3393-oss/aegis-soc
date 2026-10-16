@@ -174,7 +174,7 @@ export const assets = {
     }));
     return { data, total: data.length };
   },
-  credentials: async () => { throw new Error('Credential inventory is not available in the current backend API.'); },
+  credentials: async (): Promise<{ data: unknown[]; total: number }> => { throw new Error('Credential inventory is not available in the current backend API.'); },
   policies: async () => {
     const data = await api<unknown[]>('/compliance');
     return { data, total: data.length };
@@ -188,13 +188,13 @@ export const threat = {
 };
 
 export const ai = {
-  chat: async (_message: string, _history?: { role: string; content: string }[]) => {
+  chat: async (_message: string, _history?: { role: string; content: string }[]): Promise<{ reply: string; intent?: string; simulation: boolean; model?: string }> => {
     throw new Error('AI chat is not available in the current backend API.');
   },
-  analyzeAlert: async (_id: string) => {
+  analyzeAlert: async (_id: string): Promise<unknown> => {
     throw new Error('AI alert analysis is not available in the current backend API.');
   },
-  status: async () => {
+  status: async (): Promise<{ name: string; status: string; mode: string; model?: string; note?: string; capabilities: string[] }> => {
     throw new Error('AI status is not available in the current backend API.');
   }
 };
