@@ -17,7 +17,7 @@ export async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Request failed: ${res.status}`);
+    throw new Error(body.detail || body.error || `Request failed: ${res.status}`);
   }
   return res.json();
 }
@@ -94,7 +94,7 @@ export const dashboard = {
       expiringCredentials: 0
     };
   },
-  health: () => api('/auth/')
+  health: () => api<{ status: string; service: string; version: string }>('/')
 };
 
 export const alerts = {
