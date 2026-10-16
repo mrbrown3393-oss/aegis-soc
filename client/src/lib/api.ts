@@ -99,9 +99,9 @@ export const dashboard = {
 
 export const alerts = {
   list: async (params?: Record<string, string>) => {
-    const query = new URLSearchParams({ limit: '100', ...(params ?? {}) }).toString();
+    const query = new URLSearchParams({ limit: '100', ...(params?.severity ? { severity: params.severity } : {}) }).toString();
     const rows = await api<Record<string, unknown>[]>(`/threats?${query}`);
-    const data: import('../types').Alert[] = rows.map(t => ({
+    let data: import('../types').Alert[] = rows.map(t => ({
       id: String(t.id ?? ''),
       title: String(t.title ?? 'Untitled threat'),
       severity: String(t.severity ?? 'low') as import('../types').Alert['severity'],
@@ -115,6 +115,11 @@ export const alerts = {
       assignee: null,
       description: String(t.description ?? '')
     }));
+    if (params?.status) data = data.filter(a => a.status.toLowerCase() === params.status!.toLowerCase());
+    if (params?.q) {
+      const needle = params.q.toLowerCase();
+      data = data.filter(a => `${a.title} ${a.description} ${a.source} ${a.assetId}`.toLowerCase().includes(needle));
+    }
     return { data, total: data.length };
   },
   update: async (_id: string, _body: Partial<import('../types').Alert>) => {
