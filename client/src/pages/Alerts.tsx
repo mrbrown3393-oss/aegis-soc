@@ -12,6 +12,7 @@ export default function Alerts() {
   const [filter, setFilter] = useState({ status: '', severity: '', q: '' });
   const [selected, setSelected] = useState<Alert | null>(null);
   const [loading, setLoading] = useState(true);
+  const [actionError, setActionError] = useState('');
   async function load() {
     setLoading(true);
     try {
@@ -25,9 +26,14 @@ export default function Alerts() {
   }
   useEffect(() => { load(); }, [filter.status, filter.severity]);
   async function updateStatus(id: string, status: string) {
-    await alertsApi.update(id, { status });
-    load();
-    if (selected?.id === id) setSelected({ ...selected, status });
+    setActionError('');
+    try {
+      await alertsApi.update(id, { status });
+      await load();
+      if (selected?.id === id) setSelected({ ...selected, status });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Alert status could not be updated.');
+    }
   }
   const canAct = user?.role === 'admin' || user?.role === 'analyst';
   return (
@@ -46,6 +52,7 @@ export default function Alerts() {
         </select>
         <button className="btn-primary" onClick={load}><Filter className="w-4 h-4" /> Apply</button>
       </div>
+      {actionError && <div role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">{actionError}</div>}
       <div className="grid lg:grid-cols-5 gap-4">
         <div className="lg:col-span-3 card overflow-hidden">
           <table className="w-full text-sm">
