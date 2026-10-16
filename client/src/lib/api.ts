@@ -75,7 +75,7 @@ export const dashboard = {
       simulation: false,
       generatedAt: new Date().toISOString(),
       kpis: {
-        openAlerts: recentAlerts.length,
+        openAlerts: Number(metrics.total_threats ?? recentAlerts.length),
         criticalAlerts: critical,
         highAlerts: high,
         openIncidents: Number(metrics.open_incidents ?? activeIncidents.length),
@@ -105,7 +105,7 @@ export const alerts = {
       id: String(t.id ?? ''),
       title: String(t.title ?? 'Untitled threat'),
       severity: String(t.severity ?? 'low') as import('../types').Alert['severity'],
-      status: 'open',
+      status: String(t.status ?? 'new'),
       source: String(t.source_ip ?? ''),
       category: 'threat',
       assetId: String(t.affected_asset ?? ''),
