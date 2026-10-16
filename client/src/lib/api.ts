@@ -24,13 +24,13 @@ export async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
 
 export const auth = {
   login: (email: string, password: string) =>
-    api<{ mfaRequired?: boolean; user: import('../types').User }>('/auth/login', {
+    api<{ message: string; mfaRequired?: boolean; mfaEnrolled?: boolean; email: string; role: string; tenant: string }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password })
     }),
   me: () => api<import('../types').User>('/auth/me'),
   mfaSetup: () => api<{ secret: string; otpauth: string }>('/auth/mfa/setup'),
-  mfaVerify: (code: string) => api<{ user: import('../types').User }>('/auth/mfa/verify', { method: 'POST', body: JSON.stringify({ code }) }),
+  mfaVerify: (code: string) => api<{ message: string; email: string; role: string; tenant: string }>('/auth/mfa/verify', { method: 'POST', body: JSON.stringify({ code }) }),
   logout: () => api('/auth/logout', { method: 'POST' })
 };
 
@@ -117,8 +117,9 @@ export const alerts = {
     }));
     return { data, total: data.length };
   },
-  update: (id: string, body: Partial<import('../types').Alert>) =>
-    api(`/alerts/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
+  update: async (_id: string, _body: Partial<import('../types').Alert>) => {
+    throw new Error('Alert updates are not available in the current backend API. No changes were made.');
+  }
 };
 
 export const incidents = {
