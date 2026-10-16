@@ -147,20 +147,21 @@ def test_saml_rejects_missing_or_invalid_required_assertion_controls(monkeypatch
     import base64
     from lxml import etree
     from fastapi import HTTPException
-    from sso import validate_saml_response
+    import sso
+    validate_saml_response = sso.validate_saml_response
 
-    monkeypatch.setattr(settings, "SAML_ENABLED", True)
-    monkeypatch.setattr(settings, "SAML_SP_ENTITY_ID", "https://sp.example/entity")
-    monkeypatch.setattr(settings, "SAML_ACS_URL", "https://sp.example/acs")
-    monkeypatch.setattr(settings, "SAML_IDP_ENTITY_ID", "https://idp.example/entity")
-    monkeypatch.setattr(settings, "SAML_IDP_SSO_URL", "https://idp.example/login")
-    monkeypatch.setattr(settings, "SAML_IDP_X509_CERT", "test-certificate")
-    monkeypatch.setattr(settings, "SAML_ALLOWED_TENANTS", "private")
-    monkeypatch.setattr(settings, "SAML_CLOCK_SKEW_SECONDS", 0)
-    monkeypatch.setattr(settings, "SAML_EMAIL_ATTRIBUTE", "email")
-    monkeypatch.setattr(settings, "SAML_TENANT_ATTRIBUTE", "tenant")
-    monkeypatch.setattr(settings, "SAML_ROLE_ATTRIBUTE", "role")
-    monkeypatch.setattr(settings, "SAML_NAME_ATTRIBUTE", "displayName")
+    monkeypatch.setattr(sso.settings, "SAML_ENABLED", True)
+    monkeypatch.setattr(sso.settings, "SAML_SP_ENTITY_ID", "https://sp.example/entity")
+    monkeypatch.setattr(sso.settings, "SAML_ACS_URL", "https://sp.example/acs")
+    monkeypatch.setattr(sso.settings, "SAML_IDP_ENTITY_ID", "https://idp.example/entity")
+    monkeypatch.setattr(sso.settings, "SAML_IDP_SSO_URL", "https://idp.example/login")
+    monkeypatch.setattr(sso.settings, "SAML_IDP_X509_CERT", "test-certificate")
+    monkeypatch.setattr(sso.settings, "SAML_ALLOWED_TENANTS", "private")
+    monkeypatch.setattr(sso.settings, "SAML_CLOCK_SKEW_SECONDS", 0)
+    monkeypatch.setattr(sso.settings, "SAML_EMAIL_ATTRIBUTE", "email")
+    monkeypatch.setattr(sso.settings, "SAML_TENANT_ATTRIBUTE", "tenant")
+    monkeypatch.setattr(sso.settings, "SAML_ROLE_ATTRIBUTE", "role")
+    monkeypatch.setattr(sso.settings, "SAML_NAME_ATTRIBUTE", "displayName")
 
     xml = f'''<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
         xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
