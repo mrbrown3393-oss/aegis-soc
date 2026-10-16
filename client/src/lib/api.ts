@@ -58,7 +58,7 @@ export const dashboard = {
       id: String(t.id ?? ''),
       title: String(t.title ?? 'Untitled threat'),
       severity: String(t.severity ?? 'unknown') as import('../types').Alert['severity'],
-      status: 'open',
+      status: String(t.status ?? 'new'),
       source: String(t.source_ip ?? ''),
       category: 'threat',
       assetId: String(t.affected_asset ?? ''),
@@ -183,11 +183,13 @@ export const threat = {
 };
 
 export const ai = {
-  chat: (message: string, history?: { role: string; content: string }[]) =>
-    api<{ reply: string; intent?: string; simulation: boolean; model?: string }>('/ai/chat', {
-      method: 'POST',
-      body: JSON.stringify({ message, history })
-    }),
-  analyzeAlert: (id: string) => api(`/ai/analyze/alert/${id}`),
-  status: () => api<{ name: string; status: string; mode: string; model?: string; note?: string; capabilities: string[] }>('/ai/status')
+  chat: async (_message: string, _history?: { role: string; content: string }[]) => {
+    throw new Error('AI chat is not available in the current backend API.');
+  },
+  analyzeAlert: async (_id: string) => {
+    throw new Error('AI alert analysis is not available in the current backend API.');
+  },
+  status: async () => {
+    throw new Error('AI status is not available in the current backend API.');
+  }
 };
