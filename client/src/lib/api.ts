@@ -35,8 +35,67 @@ export const auth = {
 };
 
 export const dashboard = {
-  overview: () => api<import('../types').Overview>('/dashboard/overview'),
-  health: () => api('/dashboard/health')
+  overview: async (): Promise<import('../types').Overview> => {
+    const [metrics, incidents, assets, threats] = await Promise.all([
+      api<{ total_threats: number; open_incidents: number; critical: number; high: number; trend: { _id: string; count: number }[]; severity_distribution: Record<string, number> }>('/metrics/overview'),
+      api<Record<string, unknown>[]>('/incidents'),
+      api<Record<string, unknown>[]>('/assets'),
+      api<Record<string, unknown>[]>('/threats?limit=100')
+    ]);
+    const criticalIncidents = incidents.filter(i => String(i.severity).toLowerCase() === 'critical');
+    const activeIncidents = incidents.filter(i => String(i.status).toLowerCase() !== 'resolved').map(i => ({
+      id: String(i.id ?? ''),
+      title: String(i.title ?? 'Untitled incident'),
+      severity: String(i.severity ?? 'unknown'),
+      status: String(i.status ?? 'open'),
+      createdAt: String(i.created_at ?? ''),
+      updatedAt: String(i.updated_at ?? i.created_at ?? ''),
+      owner: typeof i.assignee === 'string' ? i.assignee : null,
+      relatedAlerts: [],
+      timeline: [],
+      impact: ''
+    }));
+    const recentAlerts = threats.map(t => ({
+      id: String(t.id ?? ''),
+      title: String(t.title ?? 'Untitled threat'),
+      severity: String(t.severity ?? 'unknown') as import('../types').Alert['severity'],
+      status: 'open',
+      source: String(t.source_ip ?? ''),
+      category: 'threat',
+      assetId: String(t.affected_asset ?? ''),
+      riskScore: Number(t.confidence ?? 0),
+      createdAt: String(t.timestamp ?? ''),
+      updatedAt: String(t.timestamp ?? ''),
+      assignee: null,
+      description: String(t.description ?? '')
+    }));
+    const severityCounts = metrics.severity_distribution ?? {};
+    const critical = Number(severityCounts.critical ?? metrics.critical ?? 0);
+    const high = Number(severityCounts.high ?? metrics.high ?? 0);
+    return {
+      simulation: false,
+      generatedAt: new Date().toISOString(),
+      kpis: {
+        openAlerts: recentAlerts.length,
+        criticalAlerts: critical,
+        highAlerts: high,
+        openIncidents: Number(metrics.open_incidents ?? activeIncidents.length),
+        assetsMonitored: assets.length,
+        identitiesMonitored: 0,
+        avgIdentityRisk: 0,
+        policyCoverage: 0,
+        overallRiskScore: Math.min(100, critical * 10 + high * 5),
+        riskLevel: critical > 0 ? 'critical' : high > 0 ? 'elevated' : 'low'
+      },
+      assetHealth: { healthy: 0, warning: 0, critical: 0 },
+      recentAlerts: recentAlerts.slice(0, 10),
+      activeIncidents: activeIncidents.slice(0, 10),
+      health: {},
+      threatIntelCount: Number(metrics.total_threats ?? recentAlerts.length),
+      expiringCredentials: 0
+    };
+  },
+  health: () => api('/auth/')
 };
 
 export const alerts = {
@@ -49,13 +108,43 @@ export const alerts = {
 };
 
 export const incidents = {
-  list: () => api<{ data: import('../types').Incident[]; total: number }>('/incidents'),
+  list: async () => {
+    const rows = await api<Record<string, unknown>[]>('/incidents');
+    const data: import('../types').Incident[] = rows.map(i => ({
+      id: String(i.id ?? ''),
+      title: String(i.title ?? 'Untitled incident'),
+      severity: String(i.severity ?? 'unknown'),
+      status: String(i.status ?? 'open'),
+      createdAt: String(i.created_at ?? ''),
+      updatedAt: String(i.updated_at ?? i.created_at ?? ''),
+      owner: typeof i.assignee === 'string' ? i.assignee : null,
+      relatedAlerts: [],
+      timeline: [],
+      impact: ''
+    }));
+    return { data, total: data.length };
+  },
   update: (id: string, body: Record<string, unknown>) =>
     api(`/incidents/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
 };
 
 export const assets = {
-  list: () => api<{ data: import('../types').Asset[]; total: number }>('/assets'),
+  list: async () => {
+    const rows = await api<Record<string, unknown>[]>('/assets');
+    const data: import('../types').Asset[] = rows.map(a => ({
+      id: String(a.id ?? ''),
+      name: String(a.name ?? 'Unnamed asset'),
+      type: String(a.type ?? 'unknown'),
+      os: String(a.os ?? 'Unknown'),
+      ip: String(a.ip ?? ''),
+      criticality: Number(a.risk_score ?? 0) >= 80 ? 'critical' : Number(a.risk_score ?? 0) >= 50 ? 'high' : 'medium',
+      status: 'monitored',
+      owner: '',
+      lastSeen: String(a.last_seen ?? ''),
+      tags: []
+    }));
+    return { data, total: data.length };
+  },
   identities: () => api<{ data: import('../types').Identity[]; total: number }>('/assets/identities'),
   credentials: () => api<{ data: unknown[]; total: number }>('/assets/credentials'),
   policies: () => api<{ data: unknown[]; total: number }>('/assets/policies')
