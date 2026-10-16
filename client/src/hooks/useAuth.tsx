@@ -28,13 +28,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setMfaPending(true);
       return false;
     }
-    setUser(result.user);
+    const currentUser = await authApi.me();
+    setUser(currentUser);
     return true;
   }
 
   async function verifyMfa(code: string) {
-    const result = await authApi.mfaVerify(code);
-    setUser(result.user);
+    await authApi.mfaVerify(code);
+    const currentUser = await authApi.me();
+    setUser(currentUser);
     setMfaPending(false);
   }
 
