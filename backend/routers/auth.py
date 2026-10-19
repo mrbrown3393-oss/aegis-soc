@@ -287,7 +287,7 @@ async def password_reset_request(body: PasswordResetRequest, request: Request):
             "used": False,
         })
     await write_audit(body.email, "password_reset_request", "auth", request)
-    return {"message": "If the account exists, a reset link has been sent."}
+    return {"message": "If the account exists, password reset is unavailable until email delivery is configured."}
 
 
 @router.post("/auth/password-reset/confirm")

@@ -776,3 +776,31 @@ def test_api_health_endpoint_is_public_and_returns_liveness_status():
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+def test_password_reset_does_not_claim_email_sent_when_delivery_unconfigured(monkeypatch):
+    import asyncio
+
+    _aegis_app()
+    from routers import auth as auth_module
+
+    class FakeUsers:
+        async def find_one(self, query):
+            return None
+
+    class FakeDB:
+        users = FakeUsers()
+
+    async def noop(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(auth_module, "db", FakeDB())
+    monkeypatch.setattr(auth_module, "check_password_reset_rate_limit", noop)
+    monkeypatch.setattr(auth_module, "record_password_reset_attempt", noop)
+    monkeypatch.setattr(auth_module, "write_audit", noop)
+    monkeypatch.setattr(auth_module, "forwarded_client_ip", lambda *args: "127.0.0.1")
+
+    body = type("ResetRequest", (), {"email": "nobody@example.test"})()
+    result = asyncio.run(auth_module.password_reset_request(body, object()))
+
+    assert "unavailable" in result["message"].lower()
+    assert "sent" not in result["message"].lower()
