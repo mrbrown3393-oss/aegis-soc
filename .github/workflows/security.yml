@@ -31,13 +31,12 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          # Match the Vite 8 minimum runtime used by the CI workflow.
+          node-version: "22.12.0"
 
       - name: Install client dependencies
         working-directory: client
-        run: |
-          npm cache clean --force
-          npm install --ignore-scripts --no-audit --no-fund
+        run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund
 
       - name: Generate Node SBOM
         working-directory: client
