@@ -8,7 +8,7 @@ cryptography==50.0.2
 pydantic==2.14.1
 pydantic[email]==2.14.1
 python-multipart==0.0.32
-pydantic-settings==2.16.0
+pydantic-settings==2.16.1
 pytest==9.1.1
 httpx==0.28.1
 lxml==6.1.3
