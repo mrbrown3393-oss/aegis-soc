@@ -31,12 +31,15 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Install client dependencies
         working-directory: client
         run: |
+          rm -rf node_modules package-lock.json
+          npm cache clean --force
           npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+          npm ls --all --depth=0
 
       - name: Generate Node SBOM
         working-directory: client
