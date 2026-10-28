@@ -36,7 +36,8 @@ jobs:
 
       - name: Install client dependencies
         working-directory: client
-        run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+        run: |
+          npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
 
       - name: Generate Node SBOM
         working-directory: client
