@@ -31,8 +31,8 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          # Match the Vite 8 minimum runtime used by the CI workflow.
-          node-version: "22.12.0"
+          # Use a supported Node.js LTS release.
+          node-version: "22"
 
       - name: Install client dependencies
         working-directory: client
