@@ -43,7 +43,7 @@ def test_password_reset_request_does_not_mint_undeliverable_tokens(monkeypatch):
     monkeypatch.setattr(auth_module, "write_audit", noop)
     monkeypatch.setattr(auth_module, "forwarded_client_ip", lambda *args: "127.0.0.1")
 
-    body = PasswordResetRequest(email="account@example.test")
+    body = PasswordResetRequest(email="account@example.com")
     result = asyncio.run(auth_module.password_reset_request(body, object()))
 
     message = result["message"].lower()
