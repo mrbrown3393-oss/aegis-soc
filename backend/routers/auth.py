@@ -277,15 +277,8 @@ async def password_reset_request(body: PasswordResetRequest, request: Request):
     ip = forwarded_client_ip(request, settings.TRUSTED_PROXY_IPS)
     await check_password_reset_rate_limit(ip, body.email)
     await record_password_reset_attempt(ip, body.email)
-    user = await db.users.find_one({"email": body.email})
-    if user:
-        token = secrets.token_urlsafe(32)
-        await db.password_reset_tokens.insert_one({
-            "email": body.email,
-            "token_hash": hashlib.sha256(token.encode()).hexdigest(),
-            "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
-            "used": False,
-        })
+    # No delivery provider is configured. Do not mint or persist reset tokens
+    # that cannot be delivered to the account owner.
     await write_audit(body.email, "password_reset_request", "auth", request)
     return {"message": "If the account exists, password reset is unavailable until email delivery is configured."}
 
