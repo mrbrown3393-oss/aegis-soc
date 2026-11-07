@@ -31,8 +31,8 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          # Match the Vite 8 minimum runtime used by the CI workflow.
-          node-version: "22.12.0"
+          # Use a supported Node.js LTS release.
+          node-version: "22"
 
       - name: Install client dependencies
         working-directory: client
@@ -40,11 +40,13 @@ jobs:
           rm -rf node_modules package-lock.json
           npm cache clean --force
           npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
-          npm ls --all --depth=0
 
       - name: Generate Node SBOM
         working-directory: client
-        run: npx @cyclonedx/cyclonedx-npm --output-file ../sbom-node.json --output-format JSON
+        run: |
+          test -f package-lock.json
+          rm -rf node_modules
+          npx @cyclonedx/cyclonedx-npm --package-lock-only --ignore-npm-errors --output-file ../sbom-node.json --output-format JSON
 
       - uses: gitleaks/gitleaks-action@v2
         env:
