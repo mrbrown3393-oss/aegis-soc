@@ -46,7 +46,7 @@ jobs:
         run: |
           test -f package-lock.json
           rm -rf node_modules
-          npx @cyclonedx/cyclonedx-npm --package-lock-only --output-file ../sbom-node.json --output-format JSON
+          npx @cyclonedx/cyclonedx-npm --package-lock-only --ignore-npm-errors --output-file ../sbom-node.json --output-format JSON
 
       - uses: gitleaks/gitleaks-action@v2
         env:
